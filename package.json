@@ -1,5 +1,5 @@
 {
-  "name": "@sharpapi/client",
+  "name": "@sharp-api/client",
   "version": "0.1.0",
   "description": "Official TypeScript/JavaScript client for the SharpAPI real-time sports betting odds API",
   "type": "module",
