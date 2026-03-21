@@ -109,7 +109,7 @@ export interface EVOpportunity {
   sharpOdds: OddsValue
   sharpBook: string
   fairProbability: number
-  evPercent: number
+  evPercentage: number
   kellyPercent: number
   detectedAt: string
 }

@@ -82,7 +82,7 @@ const EV_RESPONSE: APIResponse<EVOpportunity[]> = {
       sharpOdds: { american: -115, decimal: 1.869, probability: 0.535 },
       sharpBook: 'pinnacle',
       fairProbability: 0.505,
-      evPercent: 4.2,
+      evPercentage: 4.2,
       kellyPercent: 2.1,
       detectedAt: '2026-03-09T23:00:00Z',
     },
@@ -235,7 +235,7 @@ describe('EVResource', () => {
     const result = await api.ev.get({ min_ev: 3 })
 
     expect(result.data).toHaveLength(1)
-    expect(result.data[0].evPercent).toBe(4.2)
+    expect(result.data[0].evPercentage).toBe(4.2)
     expect(result.data[0].sportsbook).toBe('draftkings')
     expect(result.data[0].sharpBook).toBe('pinnacle')
   })
