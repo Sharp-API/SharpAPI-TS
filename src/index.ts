@@ -136,12 +136,6 @@ export interface ArbitrageOpportunity {
   detectedAt: string
 }
 
-/** Value bet with scoring */
-export interface ValueBet extends EVOpportunity {
-  score: number
-  confidence: 'high' | 'medium' | 'low'
-}
-
 /** Middle opportunity */
 export interface MiddleOpportunity {
   id: string
@@ -250,12 +244,6 @@ export interface EventsParams {
   offset?: number
 }
 
-export interface ScheduleParams {
-  league?: string | string[]
-  date?: string
-  team?: string
-}
-
 export interface ArbitrageParams {
   sport?: string
   league?: string
@@ -272,10 +260,6 @@ export interface EVParams {
   sportsbook?: string
   add_sportsbook?: string | string[]
   limit?: number
-}
-
-export interface ValueBetsParams extends EVParams {
-  min_score?: number
 }
 
 export interface MiddlesParams {
@@ -825,11 +809,6 @@ class EventsResource {
     return this.http.get('/api/v1/events', params as Record<string, unknown>)
   }
 
-  /** Search events */
-  async search(query: string, params?: { limit?: number }): Promise<APIResponse<Event[]>> {
-    return this.http.get('/api/v1/events/search', { q: query, ...params })
-  }
-
   /** Get a specific event */
   async get(eventId: string): Promise<APIResponse<Event>> {
     return this.http.get(`/api/v1/events/${eventId}`)
@@ -838,20 +817,6 @@ class EventsResource {
   /** Get markets for an event */
   async markets(eventId: string): Promise<APIResponse<string[]>> {
     return this.http.get(`/api/v1/events/${eventId}/markets`)
-  }
-}
-
-class ScheduleResource {
-  constructor(private http: HttpClient) {}
-
-  /** Get schedule */
-  async get(params?: ScheduleParams): Promise<APIResponse<Event[]>> {
-    return this.http.get('/api/v1/schedule', params as Record<string, unknown>)
-  }
-
-  /** Get live events */
-  async live(): Promise<APIResponse<Event[]>> {
-    return this.http.get('/api/v1/schedule/live')
   }
 }
 
@@ -874,8 +839,8 @@ class OddsResource {
   }
 
   /** Batch get odds for multiple events */
-  async multi(eventIds: string[]): Promise<APIResponse<NormalizedOdds[]>> {
-    return this.http.post('/api/v1/odds/multi', { event_ids: eventIds })
+  async batch(eventIds: string[]): Promise<APIResponse<NormalizedOdds[]>> {
+    return this.http.post('/api/v1/odds/batch', { event_ids: eventIds })
   }
 }
 
@@ -884,12 +849,12 @@ class ArbitrageResource {
 
   /** Get arbitrage opportunities */
   async get(params?: ArbitrageParams): Promise<APIResponse<ArbitrageOpportunity[]>> {
-    return this.http.get('/api/v1/arbitrage', params as Record<string, unknown>)
+    return this.http.get('/api/v1/opportunities/arbitrage', params as Record<string, unknown>)
   }
 
   /** Get arbitrage as CSV */
   async csv(params?: Omit<ArbitrageParams, 'format'>): Promise<string> {
-    const url = new URL('/api/v1/arbitrage', 'https://api.sharpapi.io')
+    const url = new URL('/api/v1/opportunities/arbitrage', 'https://api.sharpapi.io')
     url.searchParams.set('format', 'csv')
     if (params) {
       Object.entries(params).forEach(([k, v]) => {
@@ -906,16 +871,7 @@ class EVResource {
 
   /** Get +EV opportunities */
   async get(params?: EVParams): Promise<APIResponse<EVOpportunity[]>> {
-    return this.http.get('/api/v1/positive-ev', params as Record<string, unknown>)
-  }
-}
-
-class ValueBetsResource {
-  constructor(private http: HttpClient) {}
-
-  /** Get value bets */
-  async get(params?: ValueBetsParams): Promise<APIResponse<ValueBet[]>> {
-    return this.http.get('/api/v1/value-bets', params as Record<string, unknown>)
+    return this.http.get('/api/v1/opportunities/ev', params as Record<string, unknown>)
   }
 }
 
@@ -933,12 +889,12 @@ class AccountResource {
 
   /** Get account info */
   async me(): Promise<APIResponse<AccountInfo>> {
-    return this.http.get('/api/v1/me')
+    return this.http.get('/api/v1/account')
   }
 
   /** Get usage stats */
   async usage(): Promise<APIResponse<{ requests: number; streams: number }>> {
-    return this.http.get('/api/v1/me/usage')
+    return this.http.get('/api/v1/account/usage')
   }
 }
 
@@ -1045,16 +1001,12 @@ export class SharpAPI {
   readonly sportsbooks: SportsbooksResource
   /** Events endpoints */
   readonly events: EventsResource
-  /** Schedule endpoints */
-  readonly schedule: ScheduleResource
   /** Odds endpoints */
   readonly odds: OddsResource
   /** Arbitrage endpoints (Pro+ tier) */
   readonly arbitrage: ArbitrageResource
   /** +EV endpoints (Pro+ tier) */
   readonly ev: EVResource
-  /** Value bets endpoints (Pro+ tier) */
-  readonly valueBets: ValueBetsResource
   /** Middles endpoints (Pro+ tier) */
   readonly middles: MiddlesResource
   /** Account endpoints */
@@ -1069,11 +1021,9 @@ export class SharpAPI {
     this.leagues = new LeaguesResource(this.http)
     this.sportsbooks = new SportsbooksResource(this.http)
     this.events = new EventsResource(this.http)
-    this.schedule = new ScheduleResource(this.http)
     this.odds = new OddsResource(this.http)
     this.arbitrage = new ArbitrageResource(this.http)
     this.ev = new EVResource(this.http)
-    this.valueBets = new ValueBetsResource(this.http)
     this.middles = new MiddlesResource(this.http)
     this.account = new AccountResource(this.http)
     this.stream = new StreamResource(this.http)

@@ -37,11 +37,9 @@ const { data: middles } = await api.middles.get({ league: 'nba' })
 | `api.sports` | `list()`, `get(id)` | All |
 | `api.leagues` | `list(params?)`, `get(id)` | All |
 | `api.sportsbooks` | `list()`, `get(id)` | All |
-| `api.events` | `list(params?)`, `search(q)`, `get(id)`, `markets(id)` | All |
-| `api.schedule` | `get(params?)`, `live()` | All |
-| `api.odds` | `get(params?)`, `best(params?)`, `comparison(params?)`, `multi(ids)` | All |
+| `api.events` | `list(params?)`, `get(id)`, `markets(id)` | All |
+| `api.odds` | `get(params?)`, `best(params?)`, `comparison(params?)`, `batch(ids)` | All |
 | `api.ev` | `get(params?)` | Pro+ |
-| `api.valueBets` | `get(params?)` | Pro+ |
 | `api.arbitrage` | `get(params?)`, `csv(params?)` | Hobby+ |
 | `api.middles` | `get(params?)` | Pro+ |
 | `api.account` | `me()`, `usage()` | All |

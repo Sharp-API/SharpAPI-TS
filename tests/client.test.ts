@@ -150,7 +150,6 @@ describe('SharpAPI', () => {
     expect(api.leagues).toBeDefined()
     expect(api.sportsbooks).toBeDefined()
     expect(api.events).toBeDefined()
-    expect(api.schedule).toBeDefined()
     expect(api.account).toBeDefined()
     expect(api.stream).toBeDefined()
   })
@@ -213,13 +212,15 @@ describe('OddsResource', () => {
     expect(calledUrl).toContain('/odds/best')
   })
 
-  it('fetches multi odds', async () => {
+  it('fetches batch odds', async () => {
     globalThis.fetch = mockFetch(ODDS_RESPONSE)
     const api = new SharpAPI('sk_test_123')
 
-    await api.odds.multi(['evt_1', 'evt_2'])
+    await api.odds.batch(['evt_1', 'evt_2'])
 
+    const calledUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
     const calledOptions = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1] as RequestInit
+    expect(calledUrl).toContain('/odds/batch')
     expect(calledOptions.method).toBe('POST')
     expect(JSON.parse(calledOptions.body as string)).toEqual({ event_ids: ['evt_1', 'evt_2'] })
   })
