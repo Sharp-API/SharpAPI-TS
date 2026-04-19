@@ -285,6 +285,16 @@ export interface StreamParams {
 // HTTP Client
 // =============================================================================
 
+const RETRY_STATUSES = new Set([502, 503, 504])
+const RETRY_MAX_ATTEMPTS = 3
+const RETRY_BASE_DELAY_MS = 500
+const RETRY_MAX_DELAY_MS = 4000
+
+function retryDelay(attempt: number): number {
+  const ceiling = Math.min(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1), RETRY_MAX_DELAY_MS)
+  return Math.random() * ceiling
+}
+
 class HttpClient {
   private apiKey: string
   private baseUrl: string
@@ -314,23 +324,47 @@ class HttpClient {
     return url.toString()
   }
 
-  async get<T>(path: string, params?: Record<string, unknown>): Promise<T> {
+  private async request<T>(method: 'GET' | 'POST', path: string, body?: unknown, params?: Record<string, unknown>): Promise<T> {
     const url = this.buildUrl(path, params)
+    const init: RequestInit = {
+      method,
+      headers: {
+        'X-API-Key': this.apiKey,
+        'Content-Type': 'application/json',
+      },
+    }
+    if (body !== undefined) init.body = JSON.stringify(body)
 
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout)
+    let lastNetworkError: Error | undefined
+    for (let attempt = 1; attempt <= RETRY_MAX_ATTEMPTS; attempt++) {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout)
+      let response: Response | undefined
+      let networkError: Error | undefined
 
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'X-API-Key': this.apiKey,
-          'Content-Type': 'application/json',
-        },
-        signal: controller.signal,
-      })
+      try {
+        response = await fetch(url, { ...init, signal: controller.signal })
+      } catch (err) {
+        networkError = err as Error
+        if (networkError.name === 'AbortError') {
+          clearTimeout(timeoutId)
+          const error: Error & { code?: string } = new Error('Request timeout')
+          error.code = 'timeout'
+          throw error
+        }
+      } finally {
+        clearTimeout(timeoutId)
+      }
 
-      clearTimeout(timeoutId)
+      const transient = networkError !== undefined || (response !== undefined && RETRY_STATUSES.has(response.status))
+      if (attempt < RETRY_MAX_ATTEMPTS && transient) {
+        lastNetworkError = networkError
+        await new Promise(resolve => setTimeout(resolve, retryDelay(attempt)))
+        continue
+      }
+
+      if (networkError) throw networkError
+      if (!response) throw lastNetworkError ?? new Error('No response')
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({})) as APIError
@@ -340,55 +374,18 @@ class HttpClient {
         throw error
       }
 
-      return response.json()
-    } catch (err) {
-      clearTimeout(timeoutId)
-      if ((err as Error).name === 'AbortError') {
-        const error: Error & { code?: string } = new Error('Request timeout')
-        error.code = 'timeout'
-        throw error
-      }
-      throw err
+      return response.json() as Promise<T>
     }
+
+    throw lastNetworkError ?? new Error('Max retries exceeded')
+  }
+
+  async get<T>(path: string, params?: Record<string, unknown>): Promise<T> {
+    return this.request<T>('GET', path, undefined, params)
   }
 
   async post<T>(path: string, body?: unknown, params?: Record<string, unknown>): Promise<T> {
-    const url = this.buildUrl(path, params)
-
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout)
-
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'X-API-Key': this.apiKey,
-          'Content-Type': 'application/json',
-        },
-        body: body ? JSON.stringify(body) : undefined,
-        signal: controller.signal,
-      })
-
-      clearTimeout(timeoutId)
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({})) as APIError
-        const error: Error & { code?: string; status?: number } = new Error(errorData.error?.message || `HTTP ${response.status}`)
-        error.code = errorData.error?.code || 'unknown_error'
-        error.status = response.status
-        throw error
-      }
-
-      return response.json()
-    } catch (err) {
-      clearTimeout(timeoutId)
-      if ((err as Error).name === 'AbortError') {
-        const error: Error & { code?: string } = new Error('Request timeout')
-        error.code = 'timeout'
-        throw error
-      }
-      throw err
-    }
+    return this.request<T>('POST', path, body, params)
   }
 
   getStreamUrl(path: string, params?: Record<string, unknown>): string {
