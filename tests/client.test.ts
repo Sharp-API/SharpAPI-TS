@@ -1,17 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { SharpAPI, createClient } from '../src/index'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
-  APIResponse,
-  NormalizedOdds,
-  EVOpportunity,
-  ArbitrageOpportunity,
-  MiddleOpportunity,
-  Sport,
-  League,
-  Sportsbook,
-  Event,
   AccountInfo,
+  APIResponse,
+  ArbitrageOpportunity,
+  EVOpportunity,
+  NormalizedOdds,
+  Sport,
 } from '../src/index'
+import { createClient, SharpAPI } from '../src/index'
 
 // ─── Mock fetch ──────────────────────────────────────────────────────────────
 
@@ -122,15 +118,32 @@ const ARB_RESPONSE: APIResponse<ArbitrageOpportunity[]> = {
 
 const SPORTS_RESPONSE: APIResponse<Sport[]> = {
   data: [
-    { id: 'basketball', name: 'Basketball', slug: 'basketball', active: true, eventCount: 42 },
-    { id: 'football', name: 'Football', slug: 'football', active: true, eventCount: 16 },
+    {
+      id: 'basketball',
+      name: 'Basketball',
+      slug: 'basketball',
+      active: true,
+      eventCount: 42,
+    },
+    {
+      id: 'football',
+      name: 'Football',
+      slug: 'football',
+      active: true,
+      eventCount: 16,
+    },
   ],
 }
 
 const ACCOUNT_RESPONSE: APIResponse<AccountInfo> = {
   data: {
     key: { id: 'key_123', tier: 'pro', userId: 'user_123' },
-    limits: { requestsPerMinute: 300, maxStreams: 10, oddsDelaySeconds: 0, maxBooks: 15 },
+    limits: {
+      requestsPerMinute: 300,
+      maxStreams: 10,
+      oddsDelaySeconds: 0,
+      maxBooks: 15,
+    },
     features: { ev: true, arbitrage: true, middles: true, streaming: true },
     addOns: ['websocket'],
   },
@@ -160,7 +173,9 @@ describe('SharpAPI', () => {
   })
 
   it('accepts custom base URL', () => {
-    const api = new SharpAPI('sk_test_123', { baseUrl: 'https://custom.api.io' })
+    const api = new SharpAPI('sk_test_123', {
+      baseUrl: 'https://custom.api.io',
+    })
     expect(api).toBeDefined()
   })
 })
@@ -185,7 +200,8 @@ describe('OddsResource', () => {
 
     await api.odds.get({ league: ['nba', 'nfl'], live: true, limit: 50 })
 
-    const calledUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
+    const calledUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as string
     expect(calledUrl).toContain('league=nba%2Cnfl')
     expect(calledUrl).toContain('live=true')
     expect(calledUrl).toContain('limit=50')
@@ -197,7 +213,8 @@ describe('OddsResource', () => {
 
     await api.odds.get()
 
-    const calledOptions = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1] as RequestInit
+    const calledOptions = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][1] as RequestInit
     expect(calledOptions.headers).toHaveProperty('X-API-Key', 'sk_test_MY_KEY')
   })
 
@@ -208,7 +225,8 @@ describe('OddsResource', () => {
     const result = await api.odds.best({ league: 'nba' })
 
     expect(result.data).toHaveLength(1)
-    const calledUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
+    const calledUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as string
     expect(calledUrl).toContain('/odds/best')
   })
 
@@ -218,11 +236,15 @@ describe('OddsResource', () => {
 
     await api.odds.batch(['evt_1', 'evt_2'])
 
-    const calledUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
-    const calledOptions = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1] as RequestInit
+    const calledUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as string
+    const calledOptions = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][1] as RequestInit
     expect(calledUrl).toContain('/odds/batch')
     expect(calledOptions.method).toBe('POST')
-    expect(JSON.parse(calledOptions.body as string)).toEqual({ event_ids: ['evt_1', 'evt_2'] })
+    expect(JSON.parse(calledOptions.body as string)).toEqual({
+      event_ids: ['evt_1', 'evt_2'],
+    })
   })
 })
 
@@ -279,7 +301,8 @@ describe('SportsResource', () => {
     const result = await api.sports.get('basketball')
 
     expect(result.data.id).toBe('basketball')
-    const calledUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
+    const calledUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as string
     expect(calledUrl).toContain('/sports/basketball')
   })
 })
@@ -316,14 +339,22 @@ describe('Error handling', () => {
   })
 
   it('throws on 429 rate limit', async () => {
-    globalThis.fetch = mockFetchError('rate_limited', 'Rate limit exceeded', 429)
+    globalThis.fetch = mockFetchError(
+      'rate_limited',
+      'Rate limit exceeded',
+      429,
+    )
     const api = new SharpAPI('sk_test_123')
 
     await expect(api.odds.get()).rejects.toThrow('Rate limit exceeded')
   })
 
   it('throws on 403 tier restricted', async () => {
-    globalThis.fetch = mockFetchError('tier_restricted', 'Pro tier required', 403)
+    globalThis.fetch = mockFetchError(
+      'tier_restricted',
+      'Pro tier required',
+      403,
+    )
     const api = new SharpAPI('sk_test_123')
 
     await expect(api.ev.get()).rejects.toThrow('Pro tier required')
@@ -331,11 +362,12 @@ describe('Error handling', () => {
 
   it('throws on timeout', async () => {
     globalThis.fetch = vi.fn().mockImplementation(
-      () => new Promise((_, reject) => {
-        const err = new Error('The operation was aborted')
-        err.name = 'AbortError'
-        setTimeout(() => reject(err), 10)
-      })
+      () =>
+        new Promise((_, reject) => {
+          const err = new Error('The operation was aborted')
+          err.name = 'AbortError'
+          setTimeout(() => reject(err), 10)
+        }),
     )
     const api = new SharpAPI('sk_test_123', { timeout: 1 })
 
@@ -418,7 +450,10 @@ describe('StreamManager', () => {
 describe('WebSocketStreamManager', () => {
   it('creates WebSocket stream', () => {
     const api = new SharpAPI('sk_test_123')
-    const stream = api.stream.oddsWs({ sportsbook: ['draftkings'], league: ['nba'] })
+    const stream = api.stream.oddsWs({
+      sportsbook: ['draftkings'],
+      league: ['nba'],
+    })
 
     expect(stream).toBeDefined()
     expect(stream.connected).toBe(false)
@@ -455,17 +490,21 @@ describe('URL construction', () => {
 
     await api.sports.list()
 
-    const calledUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
+    const calledUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as string
     expect(calledUrl).toMatch(/^https:\/\/api\.sharpapi\.io/)
   })
 
   it('uses custom base URL', async () => {
     globalThis.fetch = mockFetch(SPORTS_RESPONSE)
-    const api = new SharpAPI('sk_test_123', { baseUrl: 'https://staging.sharpapi.io' })
+    const api = new SharpAPI('sk_test_123', {
+      baseUrl: 'https://staging.sharpapi.io',
+    })
 
     await api.sports.list()
 
-    const calledUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
+    const calledUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as string
     expect(calledUrl).toMatch(/^https:\/\/staging\.sharpapi\.io/)
   })
 
@@ -475,7 +514,8 @@ describe('URL construction', () => {
 
     await api.odds.get({ league: 'nba', live: undefined })
 
-    const calledUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
+    const calledUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as string
     expect(calledUrl).toContain('league=nba')
     expect(calledUrl).not.toContain('live')
   })

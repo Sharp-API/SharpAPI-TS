@@ -87,7 +87,15 @@ export interface NormalizedOdds {
   awayTeam: string
   marketType: string
   selection: string
-  selectionType: 'home' | 'away' | 'over' | 'under' | 'draw' | 'home_draw' | 'away_draw' | 'home_away'
+  selectionType:
+    | 'home'
+    | 'away'
+    | 'over'
+    | 'under'
+    | 'draw'
+    | 'home_draw'
+    | 'away_draw'
+    | 'home_away'
   odds: OddsValue
   line?: number
   eventStartTime: string
@@ -146,8 +154,20 @@ export interface MiddleOpportunity {
   market_type: string
   home_team: string
   away_team: string
-  side1: { book: string; selection: string; line: number; odds: { american: number; decimal: number; probability: number }; stake_percent: number }
-  side2: { book: string; selection: string; line: number; odds: { american: number; decimal: number; probability: number }; stake_percent: number }
+  side1: {
+    book: string
+    selection: string
+    line: number
+    odds: { american: number; decimal: number; probability: number }
+    stake_percent: number
+  }
+  side2: {
+    book: string
+    selection: string
+    line: number
+    odds: { american: number; decimal: number; probability: number }
+    stake_percent: number
+  }
   middle_size: number
   middle_numbers: number[]
   middle_probability: number
@@ -291,19 +311,27 @@ const RETRY_BASE_DELAY_MS = 500
 const RETRY_MAX_DELAY_MS = 4000
 
 function retryDelay(attempt: number): number {
-  const ceiling = Math.min(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1), RETRY_MAX_DELAY_MS)
+  const ceiling = Math.min(
+    RETRY_BASE_DELAY_MS * 2 ** (attempt - 1),
+    RETRY_MAX_DELAY_MS,
+  )
   return Math.random() * ceiling
 }
 
 class HttpClient {
-  private apiKey: string
+  private _apiKey: string
   private baseUrl: string
   private timeout: number
 
   constructor(config: SharpAPIConfig) {
-    this.apiKey = config.apiKey
+    this._apiKey = config.apiKey
     this.baseUrl = config.baseUrl || DEFAULT_CONFIG.baseUrl
     this.timeout = config.timeout || DEFAULT_CONFIG.timeout
+  }
+
+  /** Exposed for StreamResource — SSE URL requires the key as a query param. */
+  get apiKey(): string {
+    return this._apiKey
   }
 
   private buildUrl(path: string, params?: Record<string, unknown>): string {
@@ -324,7 +352,12 @@ class HttpClient {
     return url.toString()
   }
 
-  private async request<T>(method: 'GET' | 'POST', path: string, body?: unknown, params?: Record<string, unknown>): Promise<T> {
+  private async request<T>(
+    method: 'GET' | 'POST',
+    path: string,
+    body?: unknown,
+    params?: Record<string, unknown>,
+  ): Promise<T> {
     const url = this.buildUrl(path, params)
     const init: RequestInit = {
       method,
@@ -356,10 +389,12 @@ class HttpClient {
         clearTimeout(timeoutId)
       }
 
-      const transient = networkError !== undefined || (response !== undefined && RETRY_STATUSES.has(response.status))
+      const transient =
+        networkError !== undefined ||
+        (response !== undefined && RETRY_STATUSES.has(response.status))
       if (attempt < RETRY_MAX_ATTEMPTS && transient) {
         lastNetworkError = networkError
-        await new Promise(resolve => setTimeout(resolve, retryDelay(attempt)))
+        await new Promise((resolve) => setTimeout(resolve, retryDelay(attempt)))
         continue
       }
 
@@ -367,8 +402,10 @@ class HttpClient {
       if (!response) throw lastNetworkError ?? new Error('No response')
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({})) as APIError
-        const error: Error & { code?: string; status?: number } = new Error(errorData.error?.message || `HTTP ${response.status}`)
+        const errorData = (await response.json().catch(() => ({}))) as APIError
+        const error: Error & { code?: string; status?: number } = new Error(
+          errorData.error?.message || `HTTP ${response.status}`,
+        )
         error.code = errorData.error?.code || 'unknown_error'
         error.status = response.status
         throw error
@@ -384,7 +421,11 @@ class HttpClient {
     return this.request<T>('GET', path, undefined, params)
   }
 
-  async post<T>(path: string, body?: unknown, params?: Record<string, unknown>): Promise<T> {
+  async post<T>(
+    path: string,
+    body?: unknown,
+    params?: Record<string, unknown>,
+  ): Promise<T> {
     return this.request<T>('POST', path, body, params)
   }
 
@@ -422,10 +463,12 @@ export class StreamManager<T = unknown> {
   }
 
   on(event: StreamEventType, handler: StreamEventHandler<T>): this {
-    if (!this.handlers.has(event)) {
-      this.handlers.set(event, new Set())
+    let handlers = this.handlers.get(event)
+    if (!handlers) {
+      handlers = new Set()
+      this.handlers.set(event, handlers)
     }
-    this.handlers.get(event)!.add(handler)
+    handlers.add(handler)
     return this
   }
 
@@ -442,7 +485,9 @@ export class StreamManager<T = unknown> {
         data,
         timestamp: timestamp || new Date().toISOString(),
       }
-      handlers.forEach(handler => handler(streamEvent))
+      handlers.forEach((handler) => {
+        handler(streamEvent)
+      })
     }
   }
 
@@ -490,7 +535,7 @@ export class StreamManager<T = unknown> {
       return
     }
 
-    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts)
+    const delay = this.reconnectDelay * 2 ** this.reconnectAttempts
     this.reconnectTimer = setTimeout(() => {
       this.reconnectAttempts++
       this.connect()
@@ -521,12 +566,20 @@ export class StreamManager<T = unknown> {
 // =============================================================================
 
 export type WebSocketEventType =
-  | 'connected' | 'subscribed' | 'initial' | 'snapshot_complete'
+  | 'connected'
+  | 'subscribed'
+  | 'initial'
+  | 'snapshot_complete'
   | 'odds_update'
-  | 'ev:detected' | 'ev:expired'
-  | 'arb:detected' | 'arb:expired'
-  | 'middles:detected' | 'middles:expired'
-  | 'heartbeat' | 'pong' | 'error'
+  | 'ev:detected'
+  | 'ev:expired'
+  | 'arb:detected'
+  | 'arb:expired'
+  | 'middles:detected'
+  | 'middles:expired'
+  | 'heartbeat'
+  | 'pong'
+  | 'error'
 
 export interface WebSocketMessage<T = unknown> {
   type: WebSocketEventType
@@ -577,7 +630,8 @@ export interface WebSocketFilters {
 export class WebSocketStreamManager<T = unknown> {
   private url: string
   private ws: WebSocket | null = null
-  private handlers: Map<WebSocketEventType, Set<WebSocketEventHandler<T>>> = new Map()
+  private handlers: Map<WebSocketEventType, Set<WebSocketEventHandler<T>>> =
+    new Map()
   private reconnectAttempts = 0
   private maxReconnectAttempts = 5
   private reconnectDelay = 1000
@@ -594,10 +648,12 @@ export class WebSocketStreamManager<T = unknown> {
    * Register a handler for a specific event type
    */
   on(event: WebSocketEventType, handler: WebSocketEventHandler<T>): this {
-    if (!this.handlers.has(event)) {
-      this.handlers.set(event, new Set())
+    let handlers = this.handlers.get(event)
+    if (!handlers) {
+      handlers = new Set()
+      this.handlers.set(event, handlers)
     }
-    this.handlers.get(event)!.add(handler)
+    handlers.add(handler)
     return this
   }
 
@@ -613,7 +669,9 @@ export class WebSocketStreamManager<T = unknown> {
     const eventType = message.type as WebSocketEventType
     const handlers = this.handlers.get(eventType)
     if (handlers) {
-      handlers.forEach(handler => handler(message))
+      handlers.forEach((handler) => {
+        handler(message)
+      })
     }
   }
 
@@ -679,7 +737,11 @@ export class WebSocketStreamManager<T = unknown> {
     }
 
     this.ws.onerror = () => {
-      this.emit({ type: 'error', code: 'connection_error', message: 'WebSocket error' })
+      this.emit({
+        type: 'error',
+        code: 'connection_error',
+        message: 'WebSocket error',
+      })
     }
 
     return this
@@ -695,11 +757,15 @@ export class WebSocketStreamManager<T = unknown> {
   private scheduleReconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       console.error('[SharpAPI] Max WebSocket reconnection attempts reached')
-      this.emit({ type: 'error', code: 'max_retries', message: 'Max reconnection attempts reached' })
+      this.emit({
+        type: 'error',
+        code: 'max_retries',
+        message: 'Max reconnection attempts reached',
+      })
       return
     }
 
-    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts)
+    const delay = this.reconnectDelay * 2 ** this.reconnectAttempts
     this.reconnectTimer = setTimeout(() => {
       this.reconnectAttempts++
       this.connect()
@@ -710,7 +776,8 @@ export class WebSocketStreamManager<T = unknown> {
    * Send a message to the server
    */
   send(message: object): void {
-    if (this.ws && this.ws.readyState === 1) { // WebSocket.OPEN
+    if (this.ws && this.ws.readyState === 1) {
+      // WebSocket.OPEN
       this.ws.send(JSON.stringify(message))
     }
   }
@@ -831,8 +898,13 @@ class OddsResource {
   }
 
   /** Get odds comparison */
-  async comparison(params?: OddsParams): Promise<APIResponse<Record<string, NormalizedOdds[]>>> {
-    return this.http.get('/api/v1/odds/comparison', params as Record<string, unknown>)
+  async comparison(
+    params?: OddsParams,
+  ): Promise<APIResponse<Record<string, NormalizedOdds[]>>> {
+    return this.http.get(
+      '/api/v1/odds/comparison',
+      params as Record<string, unknown>,
+    )
   }
 
   /** Batch get odds for multiple events */
@@ -845,13 +917,21 @@ class ArbitrageResource {
   constructor(private http: HttpClient) {}
 
   /** Get arbitrage opportunities */
-  async get(params?: ArbitrageParams): Promise<APIResponse<ArbitrageOpportunity[]>> {
-    return this.http.get('/api/v1/opportunities/arbitrage', params as Record<string, unknown>)
+  async get(
+    params?: ArbitrageParams,
+  ): Promise<APIResponse<ArbitrageOpportunity[]>> {
+    return this.http.get(
+      '/api/v1/opportunities/arbitrage',
+      params as Record<string, unknown>,
+    )
   }
 
   /** Get arbitrage as CSV */
   async csv(params?: Omit<ArbitrageParams, 'format'>): Promise<string> {
-    const url = new URL('/api/v1/opportunities/arbitrage', 'https://api.sharpapi.io')
+    const url = new URL(
+      '/api/v1/opportunities/arbitrage',
+      'https://api.sharpapi.io',
+    )
     url.searchParams.set('format', 'csv')
     if (params) {
       Object.entries(params).forEach(([k, v]) => {
@@ -868,7 +948,10 @@ class EVResource {
 
   /** Get +EV opportunities */
   async get(params?: EVParams): Promise<APIResponse<EVOpportunity[]>> {
-    return this.http.get('/api/v1/opportunities/ev', params as Record<string, unknown>)
+    return this.http.get(
+      '/api/v1/opportunities/ev',
+      params as Record<string, unknown>,
+    )
   }
 }
 
@@ -877,7 +960,10 @@ class MiddlesResource {
 
   /** Get middle opportunities */
   async get(params?: MiddlesParams): Promise<APIResponse<MiddleOpportunity[]>> {
-    return this.http.get('/api/v1/opportunities/middles', params as Record<string, unknown>)
+    return this.http.get(
+      '/api/v1/opportunities/middles',
+      params as Record<string, unknown>,
+    )
   }
 }
 
@@ -899,32 +985,48 @@ class StreamResource {
   private apiKey: string
 
   constructor(private http: HttpClient) {
-    // Extract API key for WebSocket connections
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.apiKey = (http as any).apiKey
+    this.apiKey = http.apiKey
   }
 
   /** Create odds stream (SSE) */
   odds(params?: StreamParams): StreamManager<NormalizedOdds[]> {
-    const url = this.http.getStreamUrl('/api/v1/stream', { ...params, type: 'odds' } as Record<string, unknown>)
+    const url = this.http.getStreamUrl('/api/v1/stream', {
+      ...params,
+      type: 'odds',
+    } as Record<string, unknown>)
     return new StreamManager(url)
   }
 
   /** Create opportunities stream (EV + Arbitrage) - SSE */
-  opportunities(params?: StreamParams): StreamManager<{ ev: EVOpportunity[]; arbitrage: ArbitrageOpportunity[] }> {
-    const url = this.http.getStreamUrl('/api/v1/stream', { ...params, type: 'opportunities' } as Record<string, unknown>)
+  opportunities(
+    params?: StreamParams,
+  ): StreamManager<{ ev: EVOpportunity[]; arbitrage: ArbitrageOpportunity[] }> {
+    const url = this.http.getStreamUrl('/api/v1/stream', {
+      ...params,
+      type: 'opportunities',
+    } as Record<string, unknown>)
     return new StreamManager(url)
   }
 
   /** Create unified stream (odds + opportunities) - SSE */
   all(params?: StreamParams): StreamManager<Record<string, unknown>> {
-    const url = this.http.getStreamUrl('/api/v1/stream', { ...params, type: 'all' } as Record<string, unknown>)
+    const url = this.http.getStreamUrl('/api/v1/stream', {
+      ...params,
+      type: 'all',
+    } as Record<string, unknown>)
     return new StreamManager(url)
   }
 
   /** Create single event stream (SSE) */
-  event(eventId: string, params?: StreamParams): StreamManager<NormalizedOdds[]> {
-    const url = this.http.getStreamUrl('/api/v1/stream', { ...params, type: 'odds', eventId } as Record<string, unknown>)
+  event(
+    eventId: string,
+    params?: StreamParams,
+  ): StreamManager<NormalizedOdds[]> {
+    const url = this.http.getStreamUrl('/api/v1/stream', {
+      ...params,
+      type: 'odds',
+      eventId,
+    } as Record<string, unknown>)
     return new StreamManager(url)
   }
 
@@ -954,13 +1056,20 @@ class StreamResource {
     // Convert params to WebSocket filters
     const filters: WebSocketFilters = {}
     if (params?.sportsbook) {
-      filters.sportsbooks = Array.isArray(params.sportsbook) ? params.sportsbook : [params.sportsbook]
+      filters.sportsbooks = Array.isArray(params.sportsbook)
+        ? params.sportsbook
+        : [params.sportsbook]
     }
     if (params?.league) {
-      filters.leagues = Array.isArray(params.league) ? params.league : [params.league]
+      filters.leagues = Array.isArray(params.league)
+        ? params.league
+        : [params.league]
     }
 
-    return new WebSocketStreamManager(wsUrl.toString(), Object.keys(filters).length > 0 ? filters : undefined)
+    return new WebSocketStreamManager(
+      wsUrl.toString(),
+      Object.keys(filters).length > 0 ? filters : undefined,
+    )
   }
 }
 
@@ -1034,6 +1143,9 @@ export class SharpAPI {
 export default SharpAPI
 
 /** Create a new SharpAPI client */
-export function createClient(apiKey: string, options?: Omit<SharpAPIConfig, 'apiKey'>): SharpAPI {
+export function createClient(
+  apiKey: string,
+  options?: Omit<SharpAPIConfig, 'apiKey'>,
+): SharpAPI {
   return new SharpAPI(apiKey, options)
 }
