@@ -66,7 +66,7 @@ stream.disconnect()
 
 ## WebSocket Streaming
 
-Lower latency (~100ms vs 1-2s for SSE):
+Real-time push (~100ms vs 1-2s for REST polling). SSE delivers comparable latency — pick WS for bidirectional control (subscribe/unsubscribe, filter updates) or SSE for simpler one-way streaming behind firewalls:
 
 ```typescript
 const stream = api.stream.oddsWs({
