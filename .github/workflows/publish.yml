@@ -5,7 +5,30 @@ on:
     types: [published]
 
 jobs:
+  # Mirror test.yml's Node matrix on the tagged commit before publish.
+  # Previously publish.yml only ran `npm test` once on Node 20, so a
+  # regression on Node 18 or 22 could ship to npm unnoticed. npm
+  # versions are immutable (only superceded), so catching it here is
+  # cheap compared to publishing a broken version.
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ["18", "20", "22"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm test
+
   publish:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -20,7 +43,6 @@ jobs:
           registry-url: "https://registry.npmjs.org"
 
       - run: npm ci
-      - run: npm test
       - run: npx tsup
 
       - run: npm publish --provenance --access public
