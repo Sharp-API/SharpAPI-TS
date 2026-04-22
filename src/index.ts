@@ -330,6 +330,101 @@ export interface Event {
   status: 'upcoming' | 'live' | 'ended'
 }
 
+/** Subscription tier identifier */
+export type SubscriptionTier = 'free' | 'hobby' | 'pro' | 'sharp' | 'enterprise'
+
+/** Single closing-line odd entry returned by `GET /odds/closing`.
+ *
+ * Field names match the wire format (snake_case). `line` only appears on
+ * spread/total markets; `player_name` and `stat_category` only appear on
+ * player-prop markets. */
+export interface ClosingOdd {
+  sportsbook: string
+  market_type: string
+  selection: string
+  selection_type:
+    | 'home'
+    | 'away'
+    | 'over'
+    | 'under'
+    | 'draw'
+    | 'home_draw'
+    | 'away_draw'
+    | 'home_away'
+    | (string & {})
+  odds_american: number
+  odds_decimal: number
+  /** Spread / total line — present only on point-spread and totals markets. */
+  line?: number
+  /** Player-prop only. */
+  player_name?: string
+  /** Player-prop only. */
+  stat_category?: string
+}
+
+/** Books-keyed map of closing odds — one entry per sportsbook. */
+export type ClosingBooks = Record<string, ClosingOdd[]>
+
+/** Closing-line snapshot for a single event.
+ *
+ * Returned in the `data` field of `GET /odds/closing?event_id=...`. When
+ * no closing snapshot has been captured yet, `books` is an empty object
+ * and `sport`/`league`/team fields may be absent. */
+export interface ClosingSnapshot {
+  event_id: string
+  sport?: string
+  league?: string
+  home_team?: string
+  away_team?: string
+  event_start_time?: string
+  /** Server-side capture timestamp (ISO 8601). */
+  captured_at?: string
+  books: ClosingBooks
+}
+
+/** API key record returned by `GET /account/keys` (and the create/rotate
+ * endpoints, which add a one-time-only `key` field on the new key). */
+export interface APIKey {
+  id: string
+  /** Last-8-char-suffix mask of the key id (e.g. `"...FrolK3uD"`). */
+  id_masked: string
+  name: string | null
+  tier: SubscriptionTier | (string & {})
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+/** Response from `POST /account/keys` — includes the plaintext `key`
+ * value, which is shown only once. */
+export interface CreatedAPIKey {
+  id: string
+  /** The full plaintext API key (e.g. `sk_live_xxx`). Only returned on
+   * creation — the server cannot show it again. */
+  key: string
+  name: string | null
+  tier: SubscriptionTier | (string & {})
+}
+
+/** Response from `POST /account/keys/{id}/rotate`. The new key value is
+ * shown only once; the old key may either be revoked immediately or
+ * expire after a grace period. */
+export interface RotatedAPIKey {
+  new_key: CreatedAPIKey
+  old_key: {
+    id: string
+    revoked: boolean
+    expires_at: string | null
+  }
+}
+
+/** Response from `DELETE /account/keys/{id}`. */
+export interface RevokedAPIKey {
+  deleted: boolean
+  key_id: string
+  message: string
+}
+
 /** Account/key info */
 export interface AccountInfo {
   key: {
@@ -406,6 +501,13 @@ export interface MiddlesParams {
   offset?: number
 }
 
+export interface ClosingParams {
+  /** Restrict the response to a specific sportsbook (or list — CSV on the
+   * wire). When omitted, every book that has a closing snapshot for the
+   * event is returned. */
+  sportsbook?: string | string[]
+}
+
 export interface StreamParams {
   sportsbook?: string | string[]
   add_sportsbook?: string | string[]
@@ -465,7 +567,7 @@ class HttpClient {
   }
 
   private async request<T>(
-    method: 'GET' | 'POST',
+    method: 'GET' | 'POST' | 'DELETE',
     path: string,
     body?: unknown,
     params?: Record<string, unknown>,
@@ -539,6 +641,10 @@ class HttpClient {
     params?: Record<string, unknown>,
   ): Promise<T> {
     return this.request<T>('POST', path, body, params)
+  }
+
+  async delete<T>(path: string, params?: Record<string, unknown>): Promise<T> {
+    return this.request<T>('DELETE', path, undefined, params)
   }
 
   getStreamUrl(path: string, params?: Record<string, unknown>): string {
@@ -1024,6 +1130,37 @@ class OddsResource {
   async batch(eventIds: string[]): Promise<APIResponse<NormalizedOdds[]>> {
     return this.http.post('/api/v1/odds/batch', { event_ids: eventIds })
   }
+
+  /**
+   * Get the closing-line snapshot for a single event.
+   *
+   * Returns the per-book odds captured at event kickoff (the moment the
+   * sharp market locked). Used for line-shopping post-mortems and CLV
+   * (closing-line value) calculations.
+   *
+   * When no closing snapshot has been captured yet, `data.books` is an
+   * empty object.
+   *
+   * @param eventId — canonical event id (e.g. `"evt_..."`).
+   * @param options — optional `sportsbook` filter (CSV on the wire).
+   *
+   * @example
+   * ```typescript
+   * const { data } = await api.odds.closing('evt_123')
+   * for (const [book, odds] of Object.entries(data.books)) {
+   *   console.log(book, odds.length, 'markets')
+   * }
+   * ```
+   */
+  async closing(
+    eventId: string,
+    options?: ClosingParams,
+  ): Promise<APIResponse<ClosingSnapshot>> {
+    return this.http.get('/api/v1/odds/closing', {
+      event_id: eventId,
+      ...(options ?? {}),
+    } as Record<string, unknown>)
+  }
 }
 
 class ArbitrageResource {
@@ -1091,6 +1228,43 @@ class AccountResource {
   /** Get usage stats */
   async usage(): Promise<APIResponse<{ requests: number; streams: number }>> {
     return this.http.get('/api/v1/account/usage')
+  }
+}
+
+/** CRUD for the caller's API keys, backed by `/api/v1/account/keys`.
+ *
+ * Returned key records use snake_case field names to match the wire
+ * format ({@link APIKey}). The plaintext key value is only ever returned
+ * by {@link KeysResource.create} and {@link KeysResource.rotate} — the
+ * server cannot show it again. */
+class KeysResource {
+  constructor(private http: HttpClient) {}
+
+  /** List every API key on the caller's account. */
+  async list(): Promise<
+    APIResponse<APIKey[]> & { meta?: { count?: number; max_keys?: number } }
+  > {
+    return this.http.get('/api/v1/account/keys')
+  }
+
+  /** Create a new API key. The plaintext `key` value in the response is
+   * shown only once — the caller must store it securely. */
+  async create(name: string): Promise<APIResponse<CreatedAPIKey>> {
+    return this.http.post('/api/v1/account/keys', { name })
+  }
+
+  /** Revoke an API key by id. The caller cannot revoke the key they are
+   * currently authenticating with. */
+  async revoke(keyId: string): Promise<APIResponse<RevokedAPIKey>> {
+    return this.http.delete(`/api/v1/account/keys/${encodeURIComponent(keyId)}`)
+  }
+
+  /** Rotate an API key — atomically issues a replacement and revokes the
+   * original. The new plaintext `key` is shown only once. */
+  async rotate(keyId: string): Promise<APIResponse<RotatedAPIKey>> {
+    return this.http.post(
+      `/api/v1/account/keys/${encodeURIComponent(keyId)}/rotate`,
+    )
   }
 }
 
@@ -1230,6 +1404,8 @@ export class SharpAPI {
   readonly middles: MiddlesResource
   /** Account endpoints */
   readonly account: AccountResource
+  /** API key management — `/api/v1/account/keys` CRUD. */
+  readonly keys: KeysResource
   /** Streaming endpoints (requires WebSocket add-on) */
   readonly stream: StreamResource
 
@@ -1245,6 +1421,7 @@ export class SharpAPI {
     this.ev = new EVResource(this.http)
     this.middles = new MiddlesResource(this.http)
     this.account = new AccountResource(this.http)
+    this.keys = new KeysResource(this.http)
     this.stream = new StreamResource(this.http)
   }
 }

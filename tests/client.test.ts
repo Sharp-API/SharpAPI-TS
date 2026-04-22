@@ -1,10 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AccountInfo,
+  APIKey,
   APIResponse,
   ArbitrageOpportunity,
+  ClosingSnapshot,
+  CreatedAPIKey,
   EVOpportunity,
   NormalizedOdds,
+  RevokedAPIKey,
+  RotatedAPIKey,
   Sport,
 } from '../src/index'
 import { createClient, SharpAPI } from '../src/index'
@@ -149,6 +154,90 @@ const ACCOUNT_RESPONSE: APIResponse<AccountInfo> = {
   },
 }
 
+const CLOSING_RESPONSE: APIResponse<ClosingSnapshot> = {
+  data: {
+    event_id: 'evt_123',
+    sport: 'baseball',
+    league: 'mlb',
+    home_team: 'Yankees',
+    away_team: 'Red Sox',
+    event_start_time: '2026-04-22T22:10:00Z',
+    captured_at: '2026-04-22T22:09:58.412Z',
+    books: {
+      draftkings: [
+        {
+          sportsbook: 'draftkings',
+          market_type: 'moneyline',
+          selection: 'Yankees',
+          selection_type: 'home',
+          odds_american: -165,
+          odds_decimal: 1.606,
+        },
+        {
+          sportsbook: 'draftkings',
+          market_type: 'spread',
+          selection: 'Yankees -1.5',
+          selection_type: 'home',
+          odds_american: 130,
+          odds_decimal: 2.3,
+          line: -1.5,
+        },
+      ],
+    },
+  },
+  meta: { updated: '2026-04-22T22:09:58.412Z' },
+}
+
+const KEYS_LIST_RESPONSE: APIResponse<APIKey[]> & {
+  meta?: { count?: number; max_keys?: number }
+} = {
+  data: [
+    {
+      id: 'key_FrolK3uD',
+      id_masked: '...FrolK3uD',
+      name: 'Tier test: sharp',
+      tier: 'sharp',
+      is_active: true,
+      created_at: '2026-04-20T10:00:00Z',
+      updated_at: '2026-04-20T10:00:00Z',
+    },
+  ],
+  meta: { count: 1, max_keys: 2 },
+}
+
+const KEY_CREATE_RESPONSE: APIResponse<CreatedAPIKey> = {
+  data: {
+    id: 'key_NewlyMad',
+    key: 'sk_live_xxxxxxxxxxxxxxxx',
+    name: 'My new key',
+    tier: 'pro',
+  },
+}
+
+const KEY_REVOKE_RESPONSE: APIResponse<RevokedAPIKey> = {
+  data: {
+    deleted: true,
+    key_id: 'key_FrolK3uD',
+    message: 'API key revoked successfully',
+  },
+}
+
+const KEY_ROTATE_RESPONSE: APIResponse<RotatedAPIKey> = {
+  data: {
+    new_key: {
+      id: 'key_NewRotat',
+      key: 'sk_live_yyyyyyyyyyyyyyyy',
+      name: 'My rotated key',
+      tier: 'pro',
+    },
+    old_key: {
+      id: 'key_FrolK3uD',
+      revoked: true,
+      expires_at: null,
+    },
+  },
+}
+
 // ─── Client construction ────────────────────────────────────────────────────
 
 describe('SharpAPI', () => {
@@ -164,6 +253,7 @@ describe('SharpAPI', () => {
     expect(api.sportsbooks).toBeDefined()
     expect(api.events).toBeDefined()
     expect(api.account).toBeDefined()
+    expect(api.keys).toBeDefined()
     expect(api.stream).toBeDefined()
   })
 
@@ -245,6 +335,142 @@ describe('OddsResource', () => {
     expect(JSON.parse(calledOptions.body as string)).toEqual({
       event_ids: ['evt_1', 'evt_2'],
     })
+  })
+})
+
+// ─── Odds: closing ──────────────────────────────────────────────────────────
+
+describe('OddsResource.closing', () => {
+  it('fetches closing snapshot for an event', async () => {
+    globalThis.fetch = mockFetch(CLOSING_RESPONSE)
+    const api = new SharpAPI('sk_test_123')
+
+    const result = await api.odds.closing('evt_123')
+
+    expect(result.data.event_id).toBe('evt_123')
+    expect(result.data.books.draftkings).toHaveLength(2)
+    expect(result.data.books.draftkings[0].odds_american).toBe(-165)
+    expect(result.data.books.draftkings[1].line).toBe(-1.5)
+
+    const calledUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as string
+    expect(calledUrl).toContain('/odds/closing')
+    expect(calledUrl).toContain('event_id=evt_123')
+  })
+
+  it('passes sportsbook filter', async () => {
+    globalThis.fetch = mockFetch(CLOSING_RESPONSE)
+    const api = new SharpAPI('sk_test_123')
+
+    await api.odds.closing('evt_123', {
+      sportsbook: ['draftkings', 'fanduel'],
+    })
+
+    const calledUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as string
+    expect(calledUrl).toContain('sportsbook=draftkings%2Cfanduel')
+  })
+
+  it('handles empty books object', async () => {
+    const empty: APIResponse<ClosingSnapshot> = {
+      data: { event_id: 'evt_999', books: {} },
+      meta: { updated: '2026-04-22T22:09:58.412Z' },
+    }
+    globalThis.fetch = mockFetch(empty)
+    const api = new SharpAPI('sk_test_123')
+
+    const result = await api.odds.closing('evt_999')
+
+    expect(result.data.books).toEqual({})
+  })
+})
+
+// ─── Keys resource ──────────────────────────────────────────────────────────
+
+describe('KeysResource', () => {
+  it('lists API keys', async () => {
+    globalThis.fetch = mockFetch(KEYS_LIST_RESPONSE)
+    const api = new SharpAPI('sk_test_123')
+
+    const result = await api.keys.list()
+
+    expect(result.data).toHaveLength(1)
+    expect(result.data[0].id).toBe('key_FrolK3uD')
+    expect(result.data[0].tier).toBe('sharp')
+    expect(result.meta?.max_keys).toBe(2)
+
+    const calledUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as string
+    const calledOptions = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][1] as RequestInit
+    expect(calledUrl).toContain('/api/v1/account/keys')
+    expect(calledOptions.method).toBe('GET')
+  })
+
+  it('creates an API key', async () => {
+    globalThis.fetch = mockFetch(KEY_CREATE_RESPONSE)
+    const api = new SharpAPI('sk_test_123')
+
+    const result = await api.keys.create('My new key')
+
+    expect(result.data.id).toBe('key_NewlyMad')
+    expect(result.data.key).toMatch(/^sk_live_/)
+
+    const calledUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as string
+    const calledOptions = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][1] as RequestInit
+    expect(calledUrl).toContain('/api/v1/account/keys')
+    expect(calledOptions.method).toBe('POST')
+    expect(JSON.parse(calledOptions.body as string)).toEqual({
+      name: 'My new key',
+    })
+  })
+
+  it('revokes an API key', async () => {
+    globalThis.fetch = mockFetch(KEY_REVOKE_RESPONSE)
+    const api = new SharpAPI('sk_test_123')
+
+    const result = await api.keys.revoke('key_FrolK3uD')
+
+    expect(result.data.deleted).toBe(true)
+    expect(result.data.key_id).toBe('key_FrolK3uD')
+
+    const calledUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as string
+    const calledOptions = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][1] as RequestInit
+    expect(calledUrl).toContain('/api/v1/account/keys/key_FrolK3uD')
+    expect(calledOptions.method).toBe('DELETE')
+  })
+
+  it('rotates an API key', async () => {
+    globalThis.fetch = mockFetch(KEY_ROTATE_RESPONSE)
+    const api = new SharpAPI('sk_test_123')
+
+    const result = await api.keys.rotate('key_FrolK3uD')
+
+    expect(result.data.new_key.id).toBe('key_NewRotat')
+    expect(result.data.new_key.key).toMatch(/^sk_live_/)
+    expect(result.data.old_key.revoked).toBe(true)
+
+    const calledUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as string
+    const calledOptions = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][1] as RequestInit
+    expect(calledUrl).toContain('/api/v1/account/keys/key_FrolK3uD/rotate')
+    expect(calledOptions.method).toBe('POST')
+  })
+
+  it('url-encodes key id in path', async () => {
+    globalThis.fetch = mockFetch(KEY_REVOKE_RESPONSE)
+    const api = new SharpAPI('sk_test_123')
+
+    await api.keys.revoke('key/with spaces')
+
+    const calledUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as string
+    expect(calledUrl).toContain('key%2Fwith%20spaces')
   })
 })
 
