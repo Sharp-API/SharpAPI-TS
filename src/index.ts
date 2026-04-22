@@ -60,10 +60,122 @@ export interface APIResponse<T> {
   }
 }
 
+// =============================================================================
+// Error Codes
+// =============================================================================
+//
+// Canonical source of truth: sharp-api-go/pkg/errcodes/errcodes.go
+//
+// Every HTTP error response and every WebSocket "error" frame carries a
+// `code` string from one of the two unions below. When the server adds a
+// new code, update `sharp-api-go/pkg/errcodes/errcodes.go` first, then
+// mirror it here and in the Python SDK.
+
+/**
+ * HTTP API error codes — returned in the `error.code` field of non-2xx
+ * REST responses (see {@link APIError}).
+ *
+ * Note: `unauthorized` and `invalid_token` are distinct from
+ * `invalid_api_key`:
+ *   - `invalid_api_key`  — malformed or unknown `sk_...` API key on a
+ *                          regular API endpoint.
+ *   - `unauthorized`     — admin/monitoring endpoint rejected the caller
+ *                          (e.g. missing admin role, IP not allowlisted).
+ *   - `invalid_token`    — Clerk session token on the dashboard/account
+ *                          endpoints is invalid or expired.
+ */
+export type APIErrorCode =
+  | 'backpressure'
+  | 'concurrent_request_cap'
+  | 'disabled_api_key'
+  | 'expired_api_key'
+  | 'gone'
+  | 'internal_error'
+  | 'invalid_api_key'
+  | 'invalid_token'
+  | 'method_not_allowed'
+  | 'missing_api_key'
+  | 'not_found'
+  | 'rate_limited'
+  | 'service_unavailable'
+  | 'tier_restricted'
+  | 'too_many_streams'
+  | 'unauthorized'
+  | 'unknown_endpoint'
+  | 'upstream_error'
+  | 'validation_error'
+
+/**
+ * WebSocket frame error codes — carried in the `code` field of `"error"`
+ * messages sent over the WS stream (see {@link WebSocketMessage}). These
+ * are distinct from HTTP codes because the transport and recovery paths
+ * differ.
+ */
+export type WSErrorCode =
+  | 'already_authenticated'
+  | 'invalid_message'
+  | 'missing_channels'
+  | 'missing_token'
+  | 'not_authenticated'
+  | 'unknown_message_type'
+
+/**
+ * Runtime lookup table for every HTTP error code. Useful for exhaustive
+ * switch statements and runtime validation (e.g. `code in API_ERROR_CODES`).
+ */
+export const API_ERROR_CODES: Record<APIErrorCode, APIErrorCode> = {
+  backpressure: 'backpressure',
+  concurrent_request_cap: 'concurrent_request_cap',
+  disabled_api_key: 'disabled_api_key',
+  expired_api_key: 'expired_api_key',
+  gone: 'gone',
+  internal_error: 'internal_error',
+  invalid_api_key: 'invalid_api_key',
+  invalid_token: 'invalid_token',
+  method_not_allowed: 'method_not_allowed',
+  missing_api_key: 'missing_api_key',
+  not_found: 'not_found',
+  rate_limited: 'rate_limited',
+  service_unavailable: 'service_unavailable',
+  tier_restricted: 'tier_restricted',
+  too_many_streams: 'too_many_streams',
+  unauthorized: 'unauthorized',
+  unknown_endpoint: 'unknown_endpoint',
+  upstream_error: 'upstream_error',
+  validation_error: 'validation_error',
+} as const
+
+/** Runtime lookup table for every WebSocket-frame error code. */
+export const WS_ERROR_CODES: Record<WSErrorCode, WSErrorCode> = {
+  already_authenticated: 'already_authenticated',
+  invalid_message: 'invalid_message',
+  missing_channels: 'missing_channels',
+  missing_token: 'missing_token',
+  not_authenticated: 'not_authenticated',
+  unknown_message_type: 'unknown_message_type',
+} as const
+
+/**
+ * @deprecated The server collapsed `bad_request` and `invalid_request`
+ * into {@link APIErrorCode} `'validation_error'` on 2026-04-22. These
+ * aliases exist only for consumers still branching on the old strings —
+ * both resolve to `'validation_error'` at runtime. Will be removed in a
+ * future major release.
+ */
+export const DEPRECATED_API_ERROR_CODES = {
+  /** @deprecated Use `'validation_error'`. */
+  bad_request: 'validation_error',
+  /** @deprecated Use `'validation_error'`. */
+  invalid_request: 'validation_error',
+} as const
+
 /** Standard API error response */
 export interface APIError {
   error: {
-    code: string
+    /** Canonical error code — one of {@link APIErrorCode}. Typed as a
+     * widened string to tolerate unknown future codes without breaking
+     * older SDK builds. */
+    code: APIErrorCode | (string & {})
     message: string
     retry_after?: number
   }
@@ -595,8 +707,9 @@ export interface WebSocketMessage<T = unknown> {
   count?: number
   /** Books included (on snapshot_complete) */
   books?: string[]
-  /** Error code or close code */
-  code?: string | number
+  /** Error code ({@link WSErrorCode}) or numeric WebSocket close code. Typed
+   * as a widened string to tolerate unknown future codes. */
+  code?: WSErrorCode | (string & {}) | number
   /** Welcome or error message */
   message?: string
   /** Stream ID (on connected) */
