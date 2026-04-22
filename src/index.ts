@@ -27,6 +27,24 @@
 // Configuration
 // =============================================================================
 
+/**
+ * How the SDK presents the API key on REST requests.
+ *
+ * - `'x-api-key'` (default): sends `X-API-Key: <apiKey>`. Matches the
+ *   historical behaviour of the SDK and is the recommended choice for
+ *   most users.
+ * - `'bearer'`: sends `Authorization: Bearer <apiKey>` instead. Use this
+ *   when the request travels through an IAM / SSO layer or an API
+ *   gateway / corporate proxy that strips custom headers (`X-*`) but
+ *   preserves the standard `Authorization` header.
+ *
+ * SSE and WebSocket auth are unaffected by this setting — those
+ * transports always pass the key as the `?api_key=` query parameter
+ * because browsers cannot set custom headers on `EventSource` or
+ * `WebSocket` connections.
+ */
+export type AuthMethod = 'x-api-key' | 'bearer'
+
 export interface SharpAPIConfig {
   /** API key (sk_xxx format) */
   apiKey: string
@@ -34,11 +52,21 @@ export interface SharpAPIConfig {
   baseUrl?: string
   /** Request timeout in ms (default: 30000) */
   timeout?: number
+  /**
+   * Auth header to use on REST requests (default: `'x-api-key'`).
+   *
+   * Set to `'bearer'` to send `Authorization: Bearer <apiKey>` instead
+   * of `X-API-Key: <apiKey>` — useful behind IAM / SSO layers and API
+   * gateways that strip non-standard headers. SSE and WebSocket
+   * transports are unaffected (they always use `?api_key=` query).
+   */
+  authMethod?: AuthMethod
 }
 
 const DEFAULT_CONFIG = {
   baseUrl: 'https://api.sharpapi.io',
   timeout: 30000,
+  authMethod: 'x-api-key' as AuthMethod,
 }
 
 // =============================================================================
@@ -536,11 +564,13 @@ class HttpClient {
   private _apiKey: string
   private baseUrl: string
   private timeout: number
+  private authMethod: AuthMethod
 
   constructor(config: SharpAPIConfig) {
     this._apiKey = config.apiKey
     this.baseUrl = config.baseUrl || DEFAULT_CONFIG.baseUrl
     this.timeout = config.timeout || DEFAULT_CONFIG.timeout
+    this.authMethod = config.authMethod || DEFAULT_CONFIG.authMethod
   }
 
   /** Exposed for StreamResource — SSE URL requires the key as a query param. */
@@ -573,10 +603,14 @@ class HttpClient {
     params?: Record<string, unknown>,
   ): Promise<T> {
     const url = this.buildUrl(path, params)
+    const authHeaders: Record<string, string> =
+      this.authMethod === 'bearer'
+        ? { Authorization: `Bearer ${this.apiKey}` }
+        : { 'X-API-Key': this.apiKey }
     const init: RequestInit = {
       method,
       headers: {
-        'X-API-Key': this.apiKey,
+        ...authHeaders,
         'Content-Type': 'application/json',
       },
     }

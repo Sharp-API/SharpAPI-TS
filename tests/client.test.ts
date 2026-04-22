@@ -306,6 +306,33 @@ describe('OddsResource', () => {
     const calledOptions = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
       .calls[0][1] as RequestInit
     expect(calledOptions.headers).toHaveProperty('X-API-Key', 'sk_test_MY_KEY')
+    expect(calledOptions.headers).not.toHaveProperty('Authorization')
+  })
+
+  it('sends Bearer token when authMethod is "bearer"', async () => {
+    globalThis.fetch = mockFetch(ODDS_RESPONSE)
+    const api = new SharpAPI('sk_test_MY_KEY', { authMethod: 'bearer' })
+
+    await api.odds.get()
+
+    const calledOptions = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][1] as RequestInit
+    expect(calledOptions.headers).toHaveProperty(
+      'Authorization',
+      'Bearer sk_test_MY_KEY',
+    )
+    expect(calledOptions.headers).not.toHaveProperty('X-API-Key')
+  })
+
+  it('defaults to X-API-Key when authMethod omitted', async () => {
+    globalThis.fetch = mockFetch(ODDS_RESPONSE)
+    const api = new SharpAPI('sk_test_DEFAULT')
+
+    await api.odds.get()
+
+    const calledOptions = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][1] as RequestInit
+    expect(calledOptions.headers).toHaveProperty('X-API-Key', 'sk_test_DEFAULT')
   })
 
   it('fetches best odds', async () => {
