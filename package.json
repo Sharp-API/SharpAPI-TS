@@ -1,6 +1,6 @@
 {
   "name": "@sharp-api/client",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Official TypeScript/JavaScript client for the SharpAPI real-time sports betting odds API",
   "type": "module",
   "main": "./dist/index.cjs",
