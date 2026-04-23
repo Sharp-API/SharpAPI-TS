@@ -54,14 +54,16 @@ jobs:
         # Only publish on an actual release event. workflow_dispatch
         # runs through test+build as a dry run but must not upload.
         #
-        # Auth: Trusted Publisher (OIDC). npm picks up the GitHub OIDC
-        # token automatically when no _authToken is configured. Trust is
-        # registered at:
-        #   https://www.npmjs.com/package/@sharp-api/client/access
-        # (Trusted Publishers → Sharp-API/sharpapi-ts → publish.yml).
-        # NPM_TOKEN secret remains in the repo as a break-glass fallback
-        # (add `env: NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}` back if
-        # OIDC ever regresses to 404/permission-denied).
-        # --provenance emits the SLSA attestation.
+        # Auth: NPM_TOKEN secret. Trusted Publisher (OIDC) is registered
+        # at https://www.npmjs.com/package/@sharp-api/client/access but
+        # tested twice (v0.2.5, v0.2.7) — both attempts returned the
+        # 404/permission-denied mask. Likely the package access mode
+        # ("Require 2FA OR token") needs to flip to "disallow tokens" on
+        # npm.js to fully activate OIDC. Until then NPM_TOKEN is the
+        # only auth path that works. Drop NODE_AUTH_TOKEN env once OIDC
+        # is confirmed publishing on a follow-up test release.
+        # --provenance still emits the SLSA attestation.
         if: github.event_name == 'release'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --provenance --access public
