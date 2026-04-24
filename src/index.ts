@@ -124,6 +124,7 @@ export type APIErrorCode =
   | 'method_not_allowed'
   | 'missing_api_key'
   | 'not_found'
+  | 'offset_too_large'
   | 'rate_limited'
   | 'service_unavailable'
   | 'tier_restricted'
@@ -163,6 +164,7 @@ export const API_ERROR_CODES: Record<APIErrorCode, APIErrorCode> = {
   method_not_allowed: 'method_not_allowed',
   missing_api_key: 'missing_api_key',
   not_found: 'not_found',
+  offset_too_large: 'offset_too_large',
   rate_limited: 'rate_limited',
   service_unavailable: 'service_unavailable',
   tier_restricted: 'tier_restricted',
