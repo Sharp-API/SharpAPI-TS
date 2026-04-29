@@ -288,6 +288,42 @@ export interface ArbitrageOpportunity {
   detectedAt: string
 }
 
+/**
+ * Live game state for one event, merged across sportsbooks.
+ *
+ * Returned by `/api/v1/gamestate` and the `gamestate` stream channel.
+ * Scores are consensus-merged with period-guarded outlier rejection;
+ * `gamePeriod` / `gameClock` are picked from the most-advanced book.
+ *
+ * Not present on EV / arbitrage / low-hold rows — correlate by `event_id`.
+ *
+ * Forward-compatible: adapter-specific fields pass through unchanged via
+ * the index signature, so unknown fields are preserved rather than dropped.
+ */
+export interface GameState {
+  home_score?: number | null
+  away_score?: number | null
+  game_period?: string | null
+  game_clock?: string | null
+  home_team?: string | null
+  away_team?: string | null
+  sport?: string | null
+  primary_book?: string | null
+  book_count?: number | null
+  /** Primary book has gone quiet (>30s without an update). */
+  stale?: boolean
+  /** Sport's gen counter hasn't advanced for >30s — aggregator is frozen. */
+  aggregator_stale?: boolean
+  /** Adapter-specific fields are preserved on the wire. */
+  [key: string]: unknown
+}
+
+/**
+ * Response shape for `/api/v1/gamestate`:
+ * `{ basketball: { evt_abc: GameState, ... }, football: { ... } }`.
+ */
+export type GameStateMap = Record<string, Record<string, GameState>>
+
 /** Middle opportunity */
 export interface MiddleOpportunity {
   id: string
@@ -1255,6 +1291,44 @@ class MiddlesResource {
   }
 }
 
+/**
+ * Live game state — scores, period, clock — merged across sportsbooks.
+ *
+ * Requires the Game State add-on ($79/mo) or Enterprise tier.
+ *
+ * Pair with EV / arbitrage / low-hold rows: those endpoints no longer
+ * carry `game_state` themselves — look up the row's `event_id` here.
+ *
+ * @example
+ * ```typescript
+ * const arbs = await api.arbitrage.get({ live: true })
+ * const { data: state } = await api.gamestate.get()
+ * for (const arb of arbs.data) {
+ *   const gs = state[arb.sport]?.[arb.eventId]
+ *   console.log(arb.eventName, gs?.game_period, gs?.game_clock)
+ * }
+ * ```
+ */
+class GameStateResource {
+  constructor(private http: HttpClient) {}
+
+  /**
+   * Fetch the current game state.
+   *
+   * @param sport — limit to a single sport (e.g. `"basketball"`).
+   *   Omit to fetch every sport in one call.
+   *
+   * Response `data` is `{ sport: { event_id: GameState } }`. When `sport`
+   * is provided, the outer map contains only that one key.
+   */
+  async get(sport?: string): Promise<APIResponse<GameStateMap>> {
+    const path = sport
+      ? `/api/v1/gamestate/${encodeURIComponent(sport)}`
+      : '/api/v1/gamestate'
+    return this.http.get(path)
+  }
+}
+
 class AccountResource {
   constructor(private http: HttpClient) {}
 
@@ -1356,6 +1430,19 @@ class StreamResource {
   }
 
   /**
+   * Stream live game state updates — scores, period, clock — merged
+   * across sportsbooks (SSE).
+   *
+   * Emits `gamestate:snapshot` on connect, then `gamestate:update` /
+   * `gamestate:removed` events. Requires the Game State add-on or
+   * Enterprise tier.
+   */
+  gamestate(): StreamManager<GameStateMap> {
+    const url = this.http.getStreamUrl('/api/v1/stream/gamestate', {})
+    return new StreamManager(url)
+  }
+
+  /**
    * Create WebSocket odds stream (lower latency than SSE)
    *
    * Connects to wss://ws.sharpapi.io for real-time updates.
@@ -1440,6 +1527,8 @@ export class SharpAPI {
   readonly ev: EVResource
   /** Middles endpoints (Pro+ tier) */
   readonly middles: MiddlesResource
+  /** Game State endpoints — live scores/period/clock (Game State add-on or Enterprise) */
+  readonly gamestate: GameStateResource
   /** Account endpoints */
   readonly account: AccountResource
   /** API key management — `/api/v1/account/keys` CRUD. */
@@ -1458,6 +1547,7 @@ export class SharpAPI {
     this.arbitrage = new ArbitrageResource(this.http)
     this.ev = new EVResource(this.http)
     this.middles = new MiddlesResource(this.http)
+    this.gamestate = new GameStateResource(this.http)
     this.account = new AccountResource(this.http)
     this.keys = new KeysResource(this.http)
     this.stream = new StreamResource(this.http)
