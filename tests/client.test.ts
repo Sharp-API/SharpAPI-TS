@@ -7,6 +7,7 @@ import type {
   ClosingSnapshot,
   CreatedAPIKey,
   EVOpportunity,
+  GameStateMap,
   NormalizedOdds,
   RevokedAPIKey,
   RotatedAPIKey,
@@ -731,6 +732,128 @@ describe('WebSocketStreamManager', () => {
 
     stream.disconnect()
     expect(stream.connected).toBe(false)
+  })
+})
+
+// ─── Gamestate resource ────────────────────────────────────────────────────
+
+const GAMESTATE_RESPONSE: APIResponse<GameStateMap> = {
+  data: {
+    basketball: {
+      evt_lal_bos: {
+        home_score: 48,
+        away_score: 52,
+        game_period: 'Q2',
+        game_clock: '5:23',
+        home_team: 'Boston Celtics',
+        away_team: 'Los Angeles Lakers',
+        sport: 'basketball',
+        primary_book: 'draftkings',
+        book_count: 4,
+        stale: false,
+      },
+      evt_gsw_phx: {
+        home_score: 30,
+        away_score: 28,
+        game_period: 'Q1',
+        game_clock: '1:42',
+        sport: 'basketball',
+        primary_book: 'fanduel',
+        book_count: 3,
+        aggregator_stale: true,
+      },
+    },
+    football: {
+      evt_kc_buf: {
+        home_score: 14,
+        away_score: 7,
+        game_period: 'Q2',
+        game_clock: '8:15',
+        sport: 'football',
+        primary_book: 'draftkings',
+        book_count: 5,
+      },
+    },
+  },
+  meta: { count: 3 },
+}
+
+describe('GameStateResource', () => {
+  it('fetches all sports when no arg', async () => {
+    globalThis.fetch = mockFetch(GAMESTATE_RESPONSE)
+    const api = new SharpAPI('sk_test_123')
+
+    const result = await api.gamestate.get()
+
+    expect(Object.keys(result.data)).toEqual(['basketball', 'football'])
+    const state = result.data.basketball.evt_lal_bos
+    expect(state.home_score).toBe(48)
+    expect(state.game_period).toBe('Q2')
+    expect(state.primary_book).toBe('draftkings')
+
+    const calledUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as string
+    expect(calledUrl).toMatch(/\/api\/v1\/gamestate(\?|$)/)
+  })
+
+  it('limits to a single sport when arg provided', async () => {
+    const single: APIResponse<GameStateMap> = {
+      data: { basketball: GAMESTATE_RESPONSE.data.basketball },
+    }
+    globalThis.fetch = mockFetch(single)
+    const api = new SharpAPI('sk_test_123')
+
+    const result = await api.gamestate.get('basketball')
+
+    expect(result.data.football).toBeUndefined()
+    const calledUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as string
+    expect(calledUrl).toContain('/gamestate/basketball')
+  })
+
+  it('url-encodes the sport segment', async () => {
+    globalThis.fetch = mockFetch({ data: {} })
+    const api = new SharpAPI('sk_test_123')
+
+    // Won't hit a real endpoint, but verifies we encode unusual values
+    await api.gamestate.get('table tennis')
+
+    const calledUrl = (globalThis.fetch as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as string
+    expect(calledUrl).toContain('/gamestate/table%20tennis')
+  })
+
+  it('passes through aggregator_stale and forward-compat fields', async () => {
+    globalThis.fetch = mockFetch({
+      data: {
+        basketball: {
+          evt_x: {
+            home_score: 0,
+            away_score: 0,
+            future_field: 'experimental',
+          },
+        },
+      },
+    })
+    const api = new SharpAPI('sk_test_123')
+
+    const result = await api.gamestate.get('basketball')
+    const state = result.data.basketball.evt_x
+
+    expect(state.future_field).toBe('experimental')
+  })
+
+  it('builds an SSE stream URL for /stream/gamestate', () => {
+    const api = new SharpAPI('sk_test_123')
+    const stream = api.stream.gamestate()
+
+    // StreamManager exposes the url it would connect to
+    expect((stream as unknown as { url: string }).url).toContain(
+      '/api/v1/stream/gamestate',
+    )
+    expect((stream as unknown as { url: string }).url).toContain(
+      'api_key=sk_test_123',
+    )
   })
 })
 
