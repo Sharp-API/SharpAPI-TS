@@ -6,12 +6,21 @@ import type {
   ArbitrageOpportunity,
   ClosingSnapshot,
   CreatedAPIKey,
+  EntityRef,
   EVOpportunity,
   GameStateMap,
+  League,
+  LowHoldOpportunity,
+  MiddleOpportunity,
+  NestedRefs,
   NormalizedOdds,
   RevokedAPIKey,
   RotatedAPIKey,
   Sport,
+  SportRef,
+  Sportsbook,
+  Team,
+  TeamRef,
 } from '../src/index'
 import { createClient, SharpAPI } from '../src/index'
 
@@ -894,5 +903,315 @@ describe('URL construction', () => {
       .calls[0][0] as string
     expect(calledUrl).toContain('league=nba')
     expect(calledUrl).not.toContain('live')
+  })
+})
+
+// ─── Phase 1f — nested refs + numerical_id (OpticOdds parity) ───────────────
+
+const PHASE_1F_NESTED_REFS: NestedRefs = {
+  home: {
+    id: 'new_york_yankees',
+    numerical_id: 20,
+    name: 'New York Yankees',
+    abbreviation: 'NYY',
+  },
+  away: {
+    id: 'boston_red_sox',
+    numerical_id: 5,
+    name: 'Boston Red Sox',
+    abbreviation: 'BOS',
+  },
+  sport_ref: { id: 'baseball', name: 'Baseball', numerical_id: 3 },
+  league_ref: { id: 'mlb', label: 'MLB', numerical_id: 354 },
+  market_ref: { id: 'moneyline', label: 'Moneyline', numerical_id: 878 },
+  sportsbook_ref: { id: 'pinnacle', label: 'Pinnacle', numerical_id: 28 },
+}
+
+describe('Phase 1f nested refs (NestedRefs)', () => {
+  it('TeamRef / SportRef / EntityRef accept the documented shapes', () => {
+    const team: TeamRef = {
+      id: 'new_york_yankees',
+      numerical_id: 20,
+      name: 'New York Yankees',
+      abbreviation: 'NYY',
+    }
+    const sport: SportRef = {
+      id: 'baseball',
+      name: 'Baseball',
+      numerical_id: 3,
+    }
+    const entity: EntityRef = {
+      id: 'mlb',
+      label: 'MLB',
+      numerical_id: 354,
+    }
+    expect(team.abbreviation).toBe('NYY')
+    expect(sport.numerical_id).toBe(3)
+    expect(entity.label).toBe('MLB')
+  })
+
+  it('NormalizedOdds carries optional nested refs alongside legacy flat fields', async () => {
+    const ODDS_WITH_REFS: APIResponse<NormalizedOdds[]> = {
+      data: [
+        {
+          id: 'pin_999_ml_NYY',
+          sportsbook: 'pinnacle',
+          eventId: 'evt_999',
+          sport: 'baseball',
+          league: 'mlb',
+          homeTeam: 'New York Yankees',
+          awayTeam: 'Boston Red Sox',
+          marketType: 'moneyline',
+          selection: 'New York Yankees',
+          selectionType: 'home',
+          odds: { american: -135, decimal: 1.741, probability: 0.574 },
+          eventStartTime: '2026-04-22T22:10:00Z',
+          timestamp: '2026-04-22T22:09:00Z',
+          isLive: false,
+          status: 'upcoming',
+          ...PHASE_1F_NESTED_REFS,
+        },
+      ],
+    }
+    globalThis.fetch = mockFetch(ODDS_WITH_REFS)
+    const api = new SharpAPI('sk_test_123')
+
+    const result = await api.odds.get()
+    const row = result.data[0]
+
+    // Legacy flat fields untouched.
+    expect(row.homeTeam).toBe('New York Yankees')
+    expect(row.sportsbook).toBe('pinnacle')
+    // New structured refs surface.
+    expect(row.home?.id).toBe('new_york_yankees')
+    expect(row.home?.numerical_id).toBe(20)
+    expect(row.home?.abbreviation).toBe('NYY')
+    expect(row.away?.abbreviation).toBe('BOS')
+    expect(row.sport_ref?.numerical_id).toBe(3)
+    expect(row.league_ref?.label).toBe('MLB')
+    expect(row.market_ref?.numerical_id).toBe(878)
+    expect(row.sportsbook_ref?.id).toBe('pinnacle')
+  })
+
+  it('NormalizedOdds without nested refs (legacy server) parses unchanged', async () => {
+    // Reuse the existing fixture shape (no nested refs).
+    globalThis.fetch = mockFetch(ODDS_RESPONSE)
+    const api = new SharpAPI('sk_test_123')
+
+    const result = await api.odds.get()
+    const row = result.data[0]
+
+    expect(row.home).toBeUndefined()
+    expect(row.away).toBeUndefined()
+    expect(row.sport_ref).toBeUndefined()
+    expect(row.league_ref).toBeUndefined()
+    expect(row.market_ref).toBeUndefined()
+    expect(row.sportsbook_ref).toBeUndefined()
+    // Existing fields keep working.
+    expect(row.homeTeam).toBe('Lakers')
+    expect(row.sportsbook).toBe('draftkings')
+  })
+
+  it('EVOpportunity surfaces nested refs', async () => {
+    const EV_WITH_REFS: APIResponse<EVOpportunity[]> = {
+      data: [
+        {
+          eventId: 'evt_999',
+          eventName: 'Boston Red Sox @ New York Yankees',
+          sport: 'baseball',
+          league: 'mlb',
+          marketType: 'moneyline',
+          selection: 'New York Yankees',
+          sportsbook: 'pinnacle',
+          odds: { american: -135, decimal: 1.741, probability: 0.574 },
+          sharpOdds: { american: -130, decimal: 1.769, probability: 0.565 },
+          sharpBook: 'pinnacle',
+          fairProbability: 0.555,
+          evPercentage: 3.1,
+          kellyPercent: 1.4,
+          detectedAt: '2026-04-22T22:10:00Z',
+          ...PHASE_1F_NESTED_REFS,
+        },
+      ],
+    }
+    globalThis.fetch = mockFetch(EV_WITH_REFS)
+    const api = new SharpAPI('sk_test_123')
+    const result = await api.ev.get()
+    const ev = result.data[0]
+    expect(ev.home?.numerical_id).toBe(20)
+    expect(ev.sportsbook_ref?.numerical_id).toBe(28)
+    expect(ev.market_ref?.label).toBe('Moneyline')
+  })
+
+  it('ArbitrageOpportunity carries event-level refs and per-leg sportsbook_ref', async () => {
+    const ARB_WITH_REFS: APIResponse<ArbitrageOpportunity[]> = {
+      data: [
+        {
+          eventId: 'evt_999',
+          eventName: 'Boston Red Sox @ New York Yankees',
+          sport: 'baseball',
+          league: 'mlb',
+          marketType: 'moneyline',
+          profitPercent: 1.2,
+          impliedTotal: 0.988,
+          legs: [
+            {
+              sportsbook: 'pinnacle',
+              selection: 'New York Yankees',
+              selectionType: 'home',
+              odds: { american: -135, decimal: 1.741, probability: 0.574 },
+              stakePercent: 58.5,
+              sportsbook_ref: {
+                id: 'pinnacle',
+                label: 'Pinnacle',
+                numerical_id: 28,
+              },
+            },
+            {
+              sportsbook: 'draftkings',
+              selection: 'Boston Red Sox',
+              selectionType: 'away',
+              odds: { american: 145, decimal: 2.45, probability: 0.408 },
+              stakePercent: 41.5,
+              sportsbook_ref: {
+                id: 'draftkings',
+                label: 'DraftKings',
+                numerical_id: 4,
+              },
+            },
+          ],
+          detectedAt: '2026-04-22T22:10:00Z',
+          ...PHASE_1F_NESTED_REFS,
+        },
+      ],
+    }
+    globalThis.fetch = mockFetch(ARB_WITH_REFS)
+    const api = new SharpAPI('sk_test_123')
+    const arb = (await api.arbitrage.get()).data[0]
+    expect(arb.home?.abbreviation).toBe('NYY')
+    expect(arb.market_ref?.id).toBe('moneyline')
+    expect(arb.legs[0].sportsbook_ref?.numerical_id).toBe(28)
+    expect(arb.legs[1].sportsbook_ref?.id).toBe('draftkings')
+  })
+
+  it('MiddleOpportunity and LowHoldOpportunity accept nested refs', () => {
+    const middle: MiddleOpportunity = {
+      id: 'mid_001',
+      event_id: 'evt_999',
+      event_name: 'Boston Red Sox @ New York Yankees',
+      sport: 'baseball',
+      league: 'mlb',
+      market_type: 'point_spread',
+      home_team: 'New York Yankees',
+      away_team: 'Boston Red Sox',
+      side1: {
+        book: 'pinnacle',
+        selection: 'New York Yankees -1.5',
+        line: -1.5,
+        odds: { american: 130, decimal: 2.3, probability: 0.435 },
+        stake_percent: 50,
+      },
+      side2: {
+        book: 'draftkings',
+        selection: 'Boston Red Sox +2.5',
+        line: 2.5,
+        odds: { american: -110, decimal: 1.909, probability: 0.524 },
+        stake_percent: 50,
+      },
+      middle_size: 1.0,
+      middle_numbers: [2],
+      middle_probability: 0.04,
+      expected_value: 5.5,
+      quality_score: 60,
+      is_live: false,
+      detected_at: '2026-04-22T22:10:00Z',
+      ...PHASE_1F_NESTED_REFS,
+    }
+    expect(middle.away?.id).toBe('boston_red_sox')
+    expect(middle.league_ref?.numerical_id).toBe(354)
+
+    const lh: LowHoldOpportunity = {
+      id: 'lh_001',
+      event_name: 'Boston Red Sox @ New York Yankees',
+      sport: 'baseball',
+      market_type: 'moneyline',
+      hold_percentage: 1.4,
+      ...PHASE_1F_NESTED_REFS,
+    }
+    expect(lh.home?.numerical_id).toBe(20)
+    expect(lh.sport_ref?.id).toBe('baseball')
+  })
+})
+
+describe('Phase 1f reference endpoints (numerical_id, abbreviation)', () => {
+  it('Sport gains optional numerical_id', async () => {
+    const SPORTS_WITH_NUM_ID: APIResponse<Sport[]> = {
+      data: [
+        {
+          id: 'baseball',
+          name: 'Baseball',
+          slug: 'baseball',
+          active: true,
+          numerical_id: 3,
+        },
+      ],
+    }
+    globalThis.fetch = mockFetch(SPORTS_WITH_NUM_ID)
+    const api = new SharpAPI('sk_test_123')
+    const sports = await api.sports.list()
+    expect(sports.data[0].numerical_id).toBe(3)
+  })
+
+  it('Sport without numerical_id (legacy server) parses unchanged', async () => {
+    globalThis.fetch = mockFetch(SPORTS_RESPONSE)
+    const api = new SharpAPI('sk_test_123')
+    const sports = await api.sports.list()
+    expect(sports.data[0].numerical_id).toBeUndefined()
+    expect(sports.data[0].name).toBe('Basketball')
+  })
+
+  it('League / Sportsbook accept optional numerical_id', () => {
+    const league: League = {
+      id: 'mlb',
+      name: 'MLB',
+      slug: 'mlb',
+      sportId: 'baseball',
+      active: true,
+      numerical_id: 354,
+    }
+    const book: Sportsbook = {
+      id: 'pinnacle',
+      name: 'Pinnacle',
+      slug: 'pinnacle',
+      active: true,
+      regions: ['intl'],
+      features: ['odds'],
+      numerical_id: 28,
+    }
+    expect(league.numerical_id).toBe(354)
+    expect(book.numerical_id).toBe(28)
+  })
+
+  it('Team carries optional abbreviation and numerical_id', () => {
+    const yankees: Team = {
+      id: 'new_york_yankees',
+      name: 'New York Yankees',
+      sport: 'baseball',
+      league: 'mlb',
+      abbreviation: 'NYY',
+      numerical_id: 20,
+    }
+    expect(yankees.abbreviation).toBe('NYY')
+    expect(yankees.numerical_id).toBe(20)
+
+    // Individual-sport competitor: no abbreviation.
+    const djokovic: Team = {
+      id: 'novak_djokovic',
+      name: 'Novak Djokovic',
+      sport: 'tennis',
+      numerical_id: 9001,
+    }
+    expect(djokovic.abbreviation).toBeUndefined()
+    expect(djokovic.numerical_id).toBe(9001)
   })
 })

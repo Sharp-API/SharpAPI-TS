@@ -220,8 +220,60 @@ export interface OddsValue {
   probability: number
 }
 
+// =============================================================================
+// Phase 1f — nested reference objects (OpticOdds parity)
+// =============================================================================
+//
+// These structured ref objects ship alongside the legacy flat fields on
+// every odds row, opportunity row, and reference-list row. All fields
+// are optional and additive — clients on older API versions simply see
+// `undefined` and behave identically.
+//
+// Wire format uses snake_case (`sport_ref`, `league_ref`, `market_ref`,
+// `sportsbook_ref`).
+
+/** Structured team reference attached to `home` / `away`.
+ *
+ * `abbreviation` is only present for ~1500 team-sport entities; absent
+ * for individual-sport competitors (tennis players, MMA fighters, etc). */
+export interface TeamRef {
+  id?: string
+  numerical_id?: number
+  name?: string
+  abbreviation?: string
+}
+
+/** Structured sport reference attached to `sport_ref`. */
+export interface SportRef {
+  id?: string
+  name?: string
+  numerical_id?: number
+}
+
+/** Structured reference for league / market / sportsbook objects.
+ *
+ * Used by `league_ref`, `market_ref`, and `sportsbook_ref` on every
+ * odds, opportunity, and reference row. */
+export interface EntityRef {
+  id?: string
+  label?: string
+  numerical_id?: number
+}
+
+/** Optional structured-ref bundle attached to row-shaped responses
+ * (odds, EV, arbitrage, middles, low-hold, futures). All fields are
+ * additive and present only when the API surfaces them. */
+export interface NestedRefs {
+  home?: TeamRef
+  away?: TeamRef
+  sport_ref?: SportRef
+  league_ref?: EntityRef
+  market_ref?: EntityRef
+  sportsbook_ref?: EntityRef
+}
+
 /** Normalized odds from any sportsbook */
-export interface NormalizedOdds {
+export interface NormalizedOdds extends NestedRefs {
   id: string
   sportsbook: string
   eventId: string
@@ -249,7 +301,7 @@ export interface NormalizedOdds {
 }
 
 /** +EV (Expected Value) opportunity */
-export interface EVOpportunity {
+export interface EVOpportunity extends NestedRefs {
   eventId: string
   eventName: string
   sport: string
@@ -273,10 +325,12 @@ export interface ArbitrageLeg {
   selectionType: string
   odds: OddsValue
   stakePercent: number
+  /** Structured book ref (Phase 1f, additive). */
+  sportsbook_ref?: EntityRef
 }
 
 /** Arbitrage opportunity */
-export interface ArbitrageOpportunity {
+export interface ArbitrageOpportunity extends NestedRefs {
   eventId: string
   eventName: string
   sport: string
@@ -325,7 +379,7 @@ export interface GameState {
 export type GameStateMap = Record<string, Record<string, GameState>>
 
 /** Middle opportunity */
-export interface MiddleOpportunity {
+export interface MiddleOpportunity extends NestedRefs {
   id: string
   event_id: string
   event_name: string
@@ -357,6 +411,21 @@ export interface MiddleOpportunity {
   detected_at: string
 }
 
+/** Low-hold opportunity (low-vig market). Phase 1f adds it as a typed
+ * shape so nested refs surface alongside the existing flat fields. */
+export interface LowHoldOpportunity extends NestedRefs {
+  id: string
+  event_id?: string
+  event_name: string
+  sport: string
+  league?: string
+  market_type: string
+  hold_percentage: number
+  is_live?: boolean
+  detected_at?: string
+  [key: string]: unknown
+}
+
 /** Sport info */
 export interface Sport {
   id: string
@@ -364,6 +433,8 @@ export interface Sport {
   slug: string
   active: boolean
   eventCount?: number
+  /** Phase 1f — optional integer atlas ID, additive. */
+  numerical_id?: number
 }
 
 /** League info */
@@ -374,6 +445,8 @@ export interface League {
   sportId: string
   country?: string
   active: boolean
+  /** Phase 1f — optional integer atlas ID, additive. */
+  numerical_id?: number
 }
 
 /** Sportsbook info */
@@ -384,10 +457,36 @@ export interface Sportsbook {
   active: boolean
   regions: string[]
   features: string[]
+  /** Phase 1f — optional integer atlas ID, additive. */
+  numerical_id?: number
+}
+
+/** Market info, returned by reference market endpoints (Phase 1f). */
+export interface Market {
+  market_type: string
+  market_label?: string
+  selection_count?: number
+  book_count?: number
+  books?: string[]
+  /** Phase 1f — optional integer atlas ID, additive. */
+  numerical_id?: number
+}
+
+/** Team / competitor info, returned by `/teams` reference endpoint
+ * (Phase 1f). `abbreviation` is only present for team-sport entities;
+ * individual-sport competitors (tennis players, fighters) skip it. */
+export interface Team {
+  id: string
+  name?: string
+  sport?: string
+  league?: string
+  abbreviation?: string
+  numerical_id?: number
 }
 
 /** Event info */
-export interface Event {
+export interface Event
+  extends Omit<NestedRefs, 'market_ref' | 'sportsbook_ref'> {
   id: string
   sport: string
   league: string
@@ -428,6 +527,10 @@ export interface ClosingOdd {
   player_name?: string
   /** Player-prop only. */
   stat_category?: string
+  /** Structured market ref (Phase 1f, additive). */
+  market_ref?: EntityRef
+  /** Structured book ref (Phase 1f, additive). */
+  sportsbook_ref?: EntityRef
 }
 
 /** Books-keyed map of closing odds — one entry per sportsbook. */
@@ -448,6 +551,11 @@ export interface ClosingSnapshot {
   /** Server-side capture timestamp (ISO 8601). */
   captured_at?: string
   books: ClosingBooks
+  /** Phase 1f — optional structured refs (additive, non-breaking). */
+  home?: TeamRef
+  away?: TeamRef
+  sport_ref?: SportRef
+  league_ref?: EntityRef
 }
 
 /** API key record returned by `GET /account/keys` (and the create/rotate
