@@ -3,3 +3,8 @@ dist/
 .env
 *.tgz
 .npmrc
+coverage/
+.claude/
+.worktrees/
+.DS_Store
+tests/

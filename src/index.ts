@@ -5,7 +5,7 @@
  *
  * @example
  * ```typescript
- * import { SharpAPI } from '@sharpapi/client'
+ * import { SharpAPI } from '@sharp-api/client'
  *
  * const api = new SharpAPI('sk_xxx')
  *
@@ -92,11 +92,9 @@ export interface APIResponse<T> {
 // Error Codes
 // =============================================================================
 //
-// Canonical source of truth: sharp-api-go/pkg/errcodes/errcodes.go
-//
-// Every HTTP error response and every WebSocket "error" frame carries a
-// `code` string from one of the two unions below. When the server adds a
-// new code, update `sharp-api-go/pkg/errcodes/errcodes.go` first, then
+// The canonical error-code set is defined server-side. Every HTTP error
+// response and every WebSocket "error" frame carries a `code` string
+// from one of the two unions below. When the server adds a new code,
 // mirror it here and in the Python SDK.
 
 /**
@@ -221,7 +219,7 @@ export interface OddsValue {
 }
 
 // =============================================================================
-// Phase 1f — nested reference objects (OpticOdds parity)
+// Nested reference objects
 // =============================================================================
 //
 // These structured ref objects ship alongside the legacy flat fields on
@@ -237,12 +235,11 @@ export interface OddsValue {
  * `abbreviation` is only present for ~1500 team-sport entities; absent
  * for individual-sport competitors (tennis players, MMA fighters, etc).
  *
- * Phase 2c (May 2026) added five OpticOdds-sourced metadata fields
- * backfilled into the SharpAPI atlas: `logo` (~93% coverage), `city`,
- * `mascot`, `conference`, `division`. All five are optional and additive
- * — older servers (and 0.3.0 client code) keep working unchanged. The
- * atlas `nickname` field is intentionally NOT exposed because it
- * duplicates `mascot` per the seeding convention. */
+ * Optional metadata fields (`logo`, `city`, `mascot`, `conference`,
+ * `division`) are populated for the majority of major-league teams
+ * (~93% coverage on `logo`, similar on the rest). All five are
+ * additive — older servers (and 0.3.0 client code) keep working
+ * unchanged. */
 export interface TeamRef {
   id?: string
   numerical_id?: number
@@ -337,7 +334,7 @@ export interface ArbitrageLeg {
   selectionType: string
   odds: OddsValue
   stakePercent: number
-  /** Structured book ref (Phase 1f, additive). */
+  /** Structured book ref (optional, additive). */
   sportsbook_ref?: EntityRef
 }
 
@@ -423,8 +420,8 @@ export interface MiddleOpportunity extends NestedRefs {
   detected_at: string
 }
 
-/** Low-hold opportunity (low-vig market). Phase 1f adds it as a typed
- * shape so nested refs surface alongside the existing flat fields. */
+/** Low-hold opportunity (low-vig market). Typed shape so nested refs
+ * surface alongside the existing flat fields. */
 export interface LowHoldOpportunity extends NestedRefs {
   id: string
   event_id?: string
@@ -445,7 +442,7 @@ export interface Sport {
   slug: string
   active: boolean
   eventCount?: number
-  /** Phase 1f — optional integer atlas ID, additive. */
+  /** Optional integer numerical ID, additive. */
   numerical_id?: number
 }
 
@@ -457,7 +454,7 @@ export interface League {
   sportId: string
   country?: string
   active: boolean
-  /** Phase 1f — optional integer atlas ID, additive. */
+  /** Optional integer numerical ID, additive. */
   numerical_id?: number
 }
 
@@ -469,28 +466,29 @@ export interface Sportsbook {
   active: boolean
   regions: string[]
   features: string[]
-  /** Phase 1f — optional integer atlas ID, additive. */
+  /** Optional integer numerical ID, additive. */
   numerical_id?: number
 }
 
-/** Market info, returned by reference market endpoints (Phase 1f). */
+/** Market info, returned by reference market endpoints. */
 export interface Market {
   market_type: string
   market_label?: string
   selection_count?: number
   book_count?: number
   books?: string[]
-  /** Phase 1f — optional integer atlas ID, additive. */
+  /** Optional integer numerical ID, additive. */
   numerical_id?: number
 }
 
-/** Team / competitor info, returned by `/teams` reference endpoint
- * (Phase 1f). `abbreviation` is only present for team-sport entities;
+/** Team / competitor info, returned by `/teams` reference endpoint.
+ * `abbreviation` is only present for team-sport entities;
  * individual-sport competitors (tennis players, fighters) skip it.
  *
- * Phase 2c (May 2026) added optional metadata fields sourced from
- * OpticOdds (~93% coverage on `logo`, similar on the rest). All
- * additive — older servers omit them and clients see `undefined`. */
+ * Optional metadata fields (`logo`, `city`, `mascot`, `conference`,
+ * `division`) are populated for the majority of major-league teams
+ * (~93% coverage on `logo`, similar on the rest). All additive —
+ * older servers omit them and clients see `undefined`. */
 export interface Team {
   id: string
   name?: string
@@ -548,9 +546,9 @@ export interface ClosingOdd {
   player_name?: string
   /** Player-prop only. */
   stat_category?: string
-  /** Structured market ref (Phase 1f, additive). */
+  /** Structured market ref (optional, additive). */
   market_ref?: EntityRef
-  /** Structured book ref (Phase 1f, additive). */
+  /** Structured book ref (optional, additive). */
   sportsbook_ref?: EntityRef
 }
 
@@ -572,7 +570,7 @@ export interface ClosingSnapshot {
   /** Server-side capture timestamp (ISO 8601). */
   captured_at?: string
   books: ClosingBooks
-  /** Phase 1f — optional structured refs (additive, non-breaking). */
+  /** Optional structured refs (additive, non-breaking). */
   home?: TeamRef
   away?: TeamRef
   sport_ref?: SportRef

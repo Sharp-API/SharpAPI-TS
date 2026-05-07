@@ -23,7 +23,7 @@
   ],
   "sideEffects": false,
   "license": "MIT",
-  "author": "SharpAPI <support@sharpapi.io>",
+  "author": "SharpAPI <hello@sharpapi.io>",
   "repository": {
     "type": "git",
     "url": "https://github.com/Sharp-API/sharpapi-ts"
