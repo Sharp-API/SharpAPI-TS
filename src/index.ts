@@ -235,12 +235,24 @@ export interface OddsValue {
 /** Structured team reference attached to `home` / `away`.
  *
  * `abbreviation` is only present for ~1500 team-sport entities; absent
- * for individual-sport competitors (tennis players, MMA fighters, etc). */
+ * for individual-sport competitors (tennis players, MMA fighters, etc).
+ *
+ * Phase 2c (May 2026) added five OpticOdds-sourced metadata fields
+ * backfilled into the SharpAPI atlas: `logo` (~93% coverage), `city`,
+ * `mascot`, `conference`, `division`. All five are optional and additive
+ * — older servers (and 0.3.0 client code) keep working unchanged. The
+ * atlas `nickname` field is intentionally NOT exposed because it
+ * duplicates `mascot` per the seeding convention. */
 export interface TeamRef {
   id?: string
   numerical_id?: number
   name?: string
   abbreviation?: string
+  logo?: string
+  city?: string
+  mascot?: string
+  conference?: string
+  division?: string
 }
 
 /** Structured sport reference attached to `sport_ref`. */
@@ -474,7 +486,11 @@ export interface Market {
 
 /** Team / competitor info, returned by `/teams` reference endpoint
  * (Phase 1f). `abbreviation` is only present for team-sport entities;
- * individual-sport competitors (tennis players, fighters) skip it. */
+ * individual-sport competitors (tennis players, fighters) skip it.
+ *
+ * Phase 2c (May 2026) added optional metadata fields sourced from
+ * OpticOdds (~93% coverage on `logo`, similar on the rest). All
+ * additive — older servers omit them and clients see `undefined`. */
 export interface Team {
   id: string
   name?: string
@@ -482,6 +498,11 @@ export interface Team {
   league?: string
   abbreviation?: string
   numerical_id?: number
+  logo?: string
+  city?: string
+  mascot?: string
+  conference?: string
+  division?: string
 }
 
 /** Event info */

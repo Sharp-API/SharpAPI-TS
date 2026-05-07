@@ -2,6 +2,26 @@
 
 All notable changes to `@sharp-api/client` are documented here.
 
+## 0.3.1 — 2026-05-06
+
+### Added — TeamRef metadata (Phase 2c)
+
+`TeamRef` (and the `Team` reference-endpoint shape) gain five additional
+optional fields sourced from OpticOdds and backfilled into the SharpAPI
+atlas:
+
+- `logo` — full CDN URL (currently `cdn.opticodds.com`; mirrors to
+  `cdn.sharpapi.io` ship in a follow-up). ~93% coverage.
+- `city` — e.g. `"Arizona"` for the Diamondbacks.
+- `mascot` — e.g. `"Diamondbacks"`.
+- `conference` — e.g. `"NL"`, `"AFC"`, `"Western"`.
+- `division` — e.g. `"West Division"`, `"NL East"`, `"Pacific Division"`.
+
+All five default to `undefined` and are additive — older servers omit
+them and 0.3.0 client code keeps working unchanged. The atlas
+`nickname` field is intentionally NOT exposed because it duplicates
+`mascot` per the seeding convention.
+
 ## 0.3.0 — 2026-05-06
 
 ### Added — OpticOdds-parity nested refs (Phase 1f)

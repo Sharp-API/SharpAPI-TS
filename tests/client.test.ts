@@ -1215,3 +1215,61 @@ describe('Phase 1f reference endpoints (numerical_id, abbreviation)', () => {
     expect(djokovic.numerical_id).toBe(9001)
   })
 })
+
+describe('Phase 2c team metadata (logo / city / mascot / conference / division)', () => {
+  it('TeamRef accepts the OpticOdds-sourced metadata fields', () => {
+    const team: TeamRef = {
+      id: 'arizona_diamondbacks',
+      numerical_id: 1,
+      name: 'Arizona Diamondbacks',
+      abbreviation: 'ARI',
+      logo: 'https://cdn.opticodds.com/team-logos/baseball/18.png',
+      city: 'Arizona',
+      mascot: 'Diamondbacks',
+      conference: 'NL',
+      division: 'West Division',
+    }
+    expect(team.logo).toBe(
+      'https://cdn.opticodds.com/team-logos/baseball/18.png',
+    )
+    expect(team.city).toBe('Arizona')
+    expect(team.mascot).toBe('Diamondbacks')
+    expect(team.conference).toBe('NL')
+    expect(team.division).toBe('West Division')
+  })
+
+  it('TeamRef without Phase 2c metadata is still valid (legacy/unbacked rows)', () => {
+    const minimal: TeamRef = {
+      id: 'novak_djokovic',
+      numerical_id: 9001,
+      name: 'Novak Djokovic',
+    }
+    expect(minimal.logo).toBeUndefined()
+    expect(minimal.city).toBeUndefined()
+    expect(minimal.mascot).toBeUndefined()
+    expect(minimal.conference).toBeUndefined()
+    expect(minimal.division).toBeUndefined()
+    expect(minimal.id).toBe('novak_djokovic')
+  })
+
+  it('Team (reference endpoint) carries optional Phase 2c metadata', () => {
+    const lakers: Team = {
+      id: 'los_angeles_lakers',
+      name: 'Los Angeles Lakers',
+      sport: 'basketball',
+      league: 'nba',
+      abbreviation: 'LAL',
+      numerical_id: 206,
+      logo: 'https://cdn.opticodds.com/team-logos/basketball/14361.png',
+      city: 'Los Angeles',
+      mascot: 'Lakers',
+      conference: 'Western',
+      division: 'Pacific Division',
+    }
+    expect(lakers.logo).toBe(
+      'https://cdn.opticodds.com/team-logos/basketball/14361.png',
+    )
+    expect(lakers.conference).toBe('Western')
+    expect(lakers.division).toBe('Pacific Division')
+  })
+})
