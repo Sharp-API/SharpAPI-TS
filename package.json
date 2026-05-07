@@ -1,6 +1,6 @@
 {
   "name": "@sharp-api/client",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Official TypeScript/JavaScript client for the SharpAPI real-time sports betting odds API",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -26,10 +26,10 @@
   "author": "SharpAPI <hello@sharpapi.io>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Sharp-API/sharpapi-ts"
+    "url": "https://github.com/Sharp-API/SharpAPI-TS"
   },
   "homepage": "https://sharpapi.io",
-  "bugs": "https://github.com/Sharp-API/sharpapi-ts/issues",
+  "bugs": "https://github.com/Sharp-API/SharpAPI-TS/issues",
   "keywords": [
     "sports-betting",
     "odds",
@@ -48,8 +48,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "lint": "biome check src tests",
-    "format": "biome check --write src tests",
+    "lint": "biome check src",
+    "format": "biome check --write src",
     "prepublishOnly": "npm run build"
   },
   "devDependencies": {

@@ -2,6 +2,15 @@
 
 All notable changes to `@sharp-api/client` are documented here.
 
+## 0.3.2 — 2026-05-07
+
+### Changed
+
+- Update `repository.url` and `bugs` URLs in `package.json` to use the
+  canonical `SharpAPI-TS` repo name (was lowercase `sharpapi-ts`,
+  redirected by GitHub but worth making canonical on npm). Metadata-only
+  release; no code changes.
+
 ## 0.3.1 — 2026-05-06
 
 ### Added — TeamRef metadata
