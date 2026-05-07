@@ -1,6 +1,6 @@
 {
   "name": "@sharp-api/client",
-  "version": "0.2.9",
+  "version": "0.3.1",
   "description": "Official TypeScript/JavaScript client for the SharpAPI real-time sports betting odds API",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -23,7 +23,7 @@
   ],
   "sideEffects": false,
   "license": "MIT",
-  "author": "SharpAPI <support@sharpapi.io>",
+  "author": "SharpAPI <hello@sharpapi.io>",
   "repository": {
     "type": "git",
     "url": "https://github.com/Sharp-API/sharpapi-ts"

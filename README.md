@@ -1,4 +1,4 @@
-# @sharpapi/client
+# @sharp-api/client
 
 Official TypeScript/JavaScript client for the [SharpAPI](https://sharpapi.io) real-time sports betting odds API.
 
@@ -7,13 +7,13 @@ Get pre-computed +EV opportunities, arbitrage detection, middles, and live odds 
 ## Install
 
 ```bash
-npm install @sharpapi/client
+npm install @sharp-api/client
 ```
 
 ## Quick Start
 
 ```typescript
-import { SharpAPI } from '@sharpapi/client'
+import { SharpAPI } from '@sharp-api/client'
 
 const api = new SharpAPI('sk_live_...')
 

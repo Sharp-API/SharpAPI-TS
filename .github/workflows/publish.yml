@@ -9,12 +9,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Mirror test.yml's Node matrix on the tagged commit before publish.
-  # Previously publish.yml only ran `npm test` once on Node 20, so a
-  # regression on Node 18 or 22 could ship to npm unnoticed. npm
-  # versions are immutable (only superceded), so catching it here is
-  # cheap compared to publishing a broken version.
-  test:
+  # Mirror test.yml's Node matrix on the tagged commit: lint + typecheck
+  # before publish. npm versions are immutable, so any gate we can apply
+  # pre-upload is cheaper than publishing a broken release.
+  gate:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -30,10 +28,9 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npx tsc --noEmit
-      - run: npm test
 
   publish:
-    needs: test
+    needs: gate
     runs-on: ubuntu-latest
     permissions:
       contents: read

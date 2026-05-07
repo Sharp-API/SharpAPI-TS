@@ -5,7 +5,7 @@
  *
  * @example
  * ```typescript
- * import { SharpAPI } from '@sharpapi/client'
+ * import { SharpAPI } from '@sharp-api/client'
  *
  * const api = new SharpAPI('sk_xxx')
  *
@@ -92,11 +92,9 @@ export interface APIResponse<T> {
 // Error Codes
 // =============================================================================
 //
-// Canonical source of truth: sharp-api-go/pkg/errcodes/errcodes.go
-//
-// Every HTTP error response and every WebSocket "error" frame carries a
-// `code` string from one of the two unions below. When the server adds a
-// new code, update `sharp-api-go/pkg/errcodes/errcodes.go` first, then
+// The canonical error-code set is defined server-side. Every HTTP error
+// response and every WebSocket "error" frame carries a `code` string
+// from one of the two unions below. When the server adds a new code,
 // mirror it here and in the Python SDK.
 
 /**
@@ -220,8 +218,71 @@ export interface OddsValue {
   probability: number
 }
 
+// =============================================================================
+// Nested reference objects
+// =============================================================================
+//
+// These structured ref objects ship alongside the legacy flat fields on
+// every odds row, opportunity row, and reference-list row. All fields
+// are optional and additive — clients on older API versions simply see
+// `undefined` and behave identically.
+//
+// Wire format uses snake_case (`sport_ref`, `league_ref`, `market_ref`,
+// `sportsbook_ref`).
+
+/** Structured team reference attached to `home` / `away`.
+ *
+ * `abbreviation` is only present for ~1500 team-sport entities; absent
+ * for individual-sport competitors (tennis players, MMA fighters, etc).
+ *
+ * Optional metadata fields (`logo`, `city`, `mascot`, `conference`,
+ * `division`) are populated for the majority of major-league teams
+ * (~93% coverage on `logo`, similar on the rest). All five are
+ * additive — older servers (and 0.3.0 client code) keep working
+ * unchanged. */
+export interface TeamRef {
+  id?: string
+  numerical_id?: number
+  name?: string
+  abbreviation?: string
+  logo?: string
+  city?: string
+  mascot?: string
+  conference?: string
+  division?: string
+}
+
+/** Structured sport reference attached to `sport_ref`. */
+export interface SportRef {
+  id?: string
+  name?: string
+  numerical_id?: number
+}
+
+/** Structured reference for league / market / sportsbook objects.
+ *
+ * Used by `league_ref`, `market_ref`, and `sportsbook_ref` on every
+ * odds, opportunity, and reference row. */
+export interface EntityRef {
+  id?: string
+  label?: string
+  numerical_id?: number
+}
+
+/** Optional structured-ref bundle attached to row-shaped responses
+ * (odds, EV, arbitrage, middles, low-hold, futures). All fields are
+ * additive and present only when the API surfaces them. */
+export interface NestedRefs {
+  home?: TeamRef
+  away?: TeamRef
+  sport_ref?: SportRef
+  league_ref?: EntityRef
+  market_ref?: EntityRef
+  sportsbook_ref?: EntityRef
+}
+
 /** Normalized odds from any sportsbook */
-export interface NormalizedOdds {
+export interface NormalizedOdds extends NestedRefs {
   id: string
   sportsbook: string
   eventId: string
@@ -249,7 +310,7 @@ export interface NormalizedOdds {
 }
 
 /** +EV (Expected Value) opportunity */
-export interface EVOpportunity {
+export interface EVOpportunity extends NestedRefs {
   eventId: string
   eventName: string
   sport: string
@@ -273,10 +334,12 @@ export interface ArbitrageLeg {
   selectionType: string
   odds: OddsValue
   stakePercent: number
+  /** Structured book ref (optional, additive). */
+  sportsbook_ref?: EntityRef
 }
 
 /** Arbitrage opportunity */
-export interface ArbitrageOpportunity {
+export interface ArbitrageOpportunity extends NestedRefs {
   eventId: string
   eventName: string
   sport: string
@@ -325,7 +388,7 @@ export interface GameState {
 export type GameStateMap = Record<string, Record<string, GameState>>
 
 /** Middle opportunity */
-export interface MiddleOpportunity {
+export interface MiddleOpportunity extends NestedRefs {
   id: string
   event_id: string
   event_name: string
@@ -357,6 +420,21 @@ export interface MiddleOpportunity {
   detected_at: string
 }
 
+/** Low-hold opportunity (low-vig market). Typed shape so nested refs
+ * surface alongside the existing flat fields. */
+export interface LowHoldOpportunity extends NestedRefs {
+  id: string
+  event_id?: string
+  event_name: string
+  sport: string
+  league?: string
+  market_type: string
+  hold_percentage: number
+  is_live?: boolean
+  detected_at?: string
+  [key: string]: unknown
+}
+
 /** Sport info */
 export interface Sport {
   id: string
@@ -364,6 +442,8 @@ export interface Sport {
   slug: string
   active: boolean
   eventCount?: number
+  /** Optional integer numerical ID, additive. */
+  numerical_id?: number
 }
 
 /** League info */
@@ -374,6 +454,8 @@ export interface League {
   sportId: string
   country?: string
   active: boolean
+  /** Optional integer numerical ID, additive. */
+  numerical_id?: number
 }
 
 /** Sportsbook info */
@@ -384,10 +466,46 @@ export interface Sportsbook {
   active: boolean
   regions: string[]
   features: string[]
+  /** Optional integer numerical ID, additive. */
+  numerical_id?: number
+}
+
+/** Market info, returned by reference market endpoints. */
+export interface Market {
+  market_type: string
+  market_label?: string
+  selection_count?: number
+  book_count?: number
+  books?: string[]
+  /** Optional integer numerical ID, additive. */
+  numerical_id?: number
+}
+
+/** Team / competitor info, returned by `/teams` reference endpoint.
+ * `abbreviation` is only present for team-sport entities;
+ * individual-sport competitors (tennis players, fighters) skip it.
+ *
+ * Optional metadata fields (`logo`, `city`, `mascot`, `conference`,
+ * `division`) are populated for the majority of major-league teams
+ * (~93% coverage on `logo`, similar on the rest). All additive —
+ * older servers omit them and clients see `undefined`. */
+export interface Team {
+  id: string
+  name?: string
+  sport?: string
+  league?: string
+  abbreviation?: string
+  numerical_id?: number
+  logo?: string
+  city?: string
+  mascot?: string
+  conference?: string
+  division?: string
 }
 
 /** Event info */
-export interface Event {
+export interface Event
+  extends Omit<NestedRefs, 'market_ref' | 'sportsbook_ref'> {
   id: string
   sport: string
   league: string
@@ -428,6 +546,10 @@ export interface ClosingOdd {
   player_name?: string
   /** Player-prop only. */
   stat_category?: string
+  /** Structured market ref (optional, additive). */
+  market_ref?: EntityRef
+  /** Structured book ref (optional, additive). */
+  sportsbook_ref?: EntityRef
 }
 
 /** Books-keyed map of closing odds — one entry per sportsbook. */
@@ -448,6 +570,11 @@ export interface ClosingSnapshot {
   /** Server-side capture timestamp (ISO 8601). */
   captured_at?: string
   books: ClosingBooks
+  /** Optional structured refs (additive, non-breaking). */
+  home?: TeamRef
+  away?: TeamRef
+  sport_ref?: SportRef
+  league_ref?: EntityRef
 }
 
 /** API key record returned by `GET /account/keys` (and the create/rotate
