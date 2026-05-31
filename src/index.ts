@@ -997,6 +997,7 @@ export type WebSocketEventType =
   | 'initial'
   | 'snapshot_complete'
   | 'odds_update'
+  | 'odds:locked'
   | 'ev:detected'
   | 'ev:expired'
   | 'arb:detected'
