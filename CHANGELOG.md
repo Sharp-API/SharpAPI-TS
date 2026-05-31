@@ -2,6 +2,18 @@
 
 All notable changes to `@sharp-api/client` are documented here.
 
+## 0.4.0 — 2026-05-31
+
+### Added
+
+- `NormalizedOdds.is_active` (boolean). `false` indicates the market is
+  suspended/closed with the price frozen — mirrors OpticOdds `locked-odds` but
+  as a queryable field. Absent on the wire is treated as `true`.
+
+### Backward compatibility
+
+- Additive optional field; existing code is unaffected.
+
 ## 0.3.2 — 2026-05-07
 
 ### Changed

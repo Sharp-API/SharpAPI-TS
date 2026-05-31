@@ -306,6 +306,13 @@ export interface NormalizedOdds extends NestedRefs {
   eventStartTime: string
   timestamp: string
   isLive: boolean
+  /**
+   * `true` (default) = market open and bettable; `false` = market
+   * suspended/closed with the price frozen (mirrors OpticOdds `locked-odds`).
+   * Absent on the wire is treated as `true`. Wire key is snake_case
+   * `is_active` (the client returns raw JSON without key transforms). SHA-3803.
+   */
+  is_active: boolean
   status: 'upcoming' | 'live' | 'ended'
 }
 
