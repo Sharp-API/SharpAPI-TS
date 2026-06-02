@@ -2,6 +2,17 @@
 
 All notable changes to `@sharp-api/client` are documented here.
 
+## 0.5.0 — 2026-06-02
+
+### Changed
+
+- `NormalizedOdds.timestamp` documented as the **delivery / last-refreshed**
+  feed-freshness timestamp (advances every ingest cycle), matching OpticOdds'
+  `timestamp` — NOT a price-last-changed time. The API now populates this field
+  (previously always `null`). The removed `odds_changed_at` / `last_seen_at` /
+  `wire_received_at` were never modeled by this SDK, so no type change is
+  needed. (SHA-1048)
+
 ## 0.4.0 — 2026-05-31
 
 ### Added

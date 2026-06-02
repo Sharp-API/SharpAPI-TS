@@ -304,6 +304,11 @@ export interface NormalizedOdds extends NestedRefs {
   odds: OddsValue
   line?: number
   eventStartTime: string
+  /**
+   * ISO 8601 — when SharpAPI last refreshed this odd through its pipeline
+   * (advances every ingest cycle). A feed-freshness / delivery signal matching
+   * OpticOdds' `timestamp`; NOT a price-last-changed time. (SHA-1048)
+   */
   timestamp: string
   isLive: boolean
   /**
