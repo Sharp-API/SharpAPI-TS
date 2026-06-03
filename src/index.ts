@@ -301,6 +301,17 @@ export interface NormalizedOdds extends NestedRefs {
     | 'home_draw'
     | 'away_draw'
     | 'home_away'
+    | (string & {})
+  /**
+   * Raw structured side axis ("home" | "away" | "draw") decomposed out of the
+   * compound selectionType vocabulary (issue #76). Optional + additive — absent
+   * when the adapter didn't stamp it. Wire key is snake_case `team_side` (the
+   * client returns raw JSON without key transforms). Prefer over parsing
+   * compound selectionType prefixes like "home_over".
+   */
+  team_side?: 'home' | 'away' | 'draw' | 'over' | 'under'
+  /** Canonical contest slice ("full_game" | "1st_half" | ...) — issue #689. Wire key snake_case. */
+  market_segment?: string
   odds: OddsValue
   line?: number
   eventStartTime: string
@@ -336,6 +347,10 @@ export interface EVOpportunity extends NestedRefs {
   fairProbability: number
   evPercentage: number
   kellyPercent: number
+  /** Raw structured side axis ("home" | "away" | "draw") — issue #76. Optional; wire key snake_case `team_side`. */
+  team_side?: 'home' | 'away' | 'draw' | 'over' | 'under'
+  /** Canonical contest slice ("full_game" | "1st_half" | ...) — issue #689. Wire key snake_case. */
+  market_segment?: string
   detectedAt: string
 }
 
@@ -550,6 +565,10 @@ export interface ClosingOdd {
     | 'away_draw'
     | 'home_away'
     | (string & {})
+  /** Raw structured side axis ("home" | "away" | "draw") — issue #76. Optional + additive. */
+  team_side?: 'home' | 'away' | 'draw' | 'over' | 'under'
+  /** Canonical contest slice ("full_game" | "1st_half" | ...) — issue #689. */
+  market_segment?: string
   odds_american: number
   odds_decimal: number
   /** Spread / total line — present only on point-spread and totals markets. */

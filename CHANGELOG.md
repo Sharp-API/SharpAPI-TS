@@ -2,6 +2,21 @@
 
 All notable changes to `@sharp-api/client` are documented here.
 
+## 0.4.1 — 2026-06-02
+
+### Added — structured `team_side` + `market_segment` (issue #76 / #689)
+
+- `NormalizedOdds`, `EVOpportunity`, and `ClosingOdd` gain optional `team_side`
+  (`'home' | 'away' | 'draw' | 'over' | 'under'`) and `market_segment`
+  (`string`). Wire keys are snake_case (the client returns raw JSON without key
+  transforms), matching `is_active`.
+- `team_side` is the raw structured side decomposed out of the compound
+  `selectionType` / `selection_type` vocabulary — prefer it over parsing compound
+  prefixes like `'home_over'`. `market_segment` is the canonical contest slice.
+- `NormalizedOdds.selectionType` widened with `(string & {})` so it accepts the
+  team-total compound forms (`'home_over'`, ...) the server emits without a major
+  bump. Additive, non-breaking.
+
 ## 0.4.0 — 2026-06-02
 
 ### Changed
