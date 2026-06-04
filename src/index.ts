@@ -351,6 +351,15 @@ export interface EVOpportunity extends NestedRefs {
   team_side?: 'home' | 'away' | 'draw' | 'over' | 'under'
   /** Canonical contest slice ("full_game" | "1st_half" | ...) — issue #689. Wire key snake_case. */
   market_segment?: string
+  /**
+   * True while this live opp's sharp reference is momentarily suspended: the bet is still
+   * offered but the edge is hidden (never a stale EV%). The opp keeps its stable `id`, so it
+   * updates in-place on resume instead of flickering. Wire key snake_case `is_suspended`.
+   * Optional/additive — only present when the server flag `EV_SUSPENDED_STATE` is enabled.
+   */
+  is_suspended?: boolean
+  /** Unix seconds when the suspension began; present only when `is_suspended` is true. Wire key snake_case. */
+  suspended_since?: number
   detectedAt: string
 }
 
