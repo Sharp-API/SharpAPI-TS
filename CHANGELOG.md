@@ -2,6 +2,25 @@
 
 All notable changes to `@sharp-api/client` are documented here.
 
+## 0.4.2 — 2026-07-02
+
+### Added — suspended-opportunity state (issue #13 / sharp-api-go #789)
+
+- `EVOpportunity` gains optional `is_suspended` (`boolean`) and
+  `suspended_since` (unix seconds, present only while suspended). When the
+  sharp reference (Pinnacle) momentarily suspends a live market, the engine
+  keeps the opp visible-but-suspended under the same stable `id` with the
+  edge hidden, instead of dropping and re-adding it — consumers can grey the
+  row and keep it in place across resume. Wire keys are snake_case.
+- Inert until the server-side `EV_SUSPENDED_STATE` flag is enabled; absent
+  from the wire otherwise. Additive optional fields — non-breaking, matching
+  the `team_side` / `market_segment` precedent.
+
+### Changed
+
+- `package.json` now declares `engines: { node: ">=18" }`, matching the
+  Node 18/20/22 CI matrix (metadata only; no runtime change).
+
 ## 0.4.1 — 2026-06-02
 
 ### Added — structured `team_side` + `market_segment` (issue #76 / #689)
