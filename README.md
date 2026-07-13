@@ -1,8 +1,12 @@
 # @sharp-api/client
 
+[![npm](https://img.shields.io/npm/v/%40sharp-api%2Fclient?color=06b6d4)](https://www.npmjs.com/package/@sharp-api/client)
+[![license](https://img.shields.io/badge/license-MIT-06b6d4)](LICENSE)
+[![docs](https://img.shields.io/badge/docs-docs.sharpapi.io-06b6d4)](https://docs.sharpapi.io)
+
 Official TypeScript/JavaScript client for the [SharpAPI](https://sharpapi.io) real-time sports betting odds API.
 
-Get pre-computed +EV opportunities, arbitrage detection, middles, and live odds from 20+ sportsbooks — with Pinnacle as the sharp reference.
+Get pre-computed +EV opportunities, arbitrage detection, middles, and live odds from 45+ sportsbooks, with Pinnacle as the sharp reference.
 
 ## Install
 
@@ -66,7 +70,7 @@ stream.disconnect()
 
 ## WebSocket Streaming
 
-Real-time push (~100ms vs 1-2s for REST polling). SSE delivers comparable latency — pick WS for bidirectional control (subscribe/unsubscribe, filter updates) or SSE for simpler one-way streaming behind firewalls:
+Real-time push (~100ms vs 1-2s for REST polling). SSE delivers comparable latency: pick WS for bidirectional control (subscribe/unsubscribe, filter updates) or SSE for simpler one-way streaming behind firewalls:
 
 ```typescript
 const stream = api.stream.oddsWs({
