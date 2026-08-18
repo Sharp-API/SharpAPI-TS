@@ -48,8 +48,10 @@ jobs:
       - run: npx tsup
 
       # OIDC trusted publishing needs npm CLI 11.5.1+; Node 20's bundled
-      # npm predates that, so upgrade before the publish step.
-      - run: npm install -g npm@latest
+      # npm (10.8.2) predates that, so upgrade before the publish step.
+      # Pinned to the 11.x line, not @latest: npm 12 requires Node >=22,
+      # which this job doesn't run (confirmed via EBADENGINE 2026-08-18).
+      - run: npm install -g npm@11
 
       - name: Publish to npm
         # Only publish on an actual release event. workflow_dispatch
