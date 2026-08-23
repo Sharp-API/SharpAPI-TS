@@ -1,0 +1,58 @@
+{
+  "data": [
+    {
+      "id": "208022952083773",
+      "sportsbook": "betano",
+      "event_id": "campeonato_gpo_boer_carazo_2026-08-23_b2",
+      "event_uuid": "90807f1938cfdf42",
+      "sport": "baseball",
+      "league": "campeonato_gpo",
+      "home_team": "Carazo",
+      "away_team": "Boer",
+      "market_type": "run_line",
+      "selection": "Carazo",
+      "selection_type": "home",
+      "odds_american": 215,
+      "odds_decimal": 3.15,
+      "odds_probability": 0.3175,
+      "line": -1.5,
+      "event_start_time": "2026-08-23T17:00:00Z",
+      "is_live": true,
+      "is_active": true,
+      "timestamp": "2026-08-23T19:18:07.89281707Z",
+      "deep_link": "https://api.sharpapi.io/api/v1/deeplink/208022952083773",
+      "market_id": "2921663017",
+      "selection_id": "10262687592",
+      "is_alternate_line": false,
+      "is_main_line": false,
+      "is_stale_pregame_price": false,
+      "is_player_prop": false,
+      "is_impossible_scoreline": false,
+      "sport_ref": {
+        "id": "baseball",
+        "name": "Baseball",
+        "numerical_id": 3
+      },
+      "market_ref": {
+        "id": "run_line",
+        "label": "Run Line",
+        "numerical_id": 1221
+      },
+      "sportsbook_ref": {
+        "id": "betano",
+        "label": "Betano",
+        "numerical_id": 7
+      },
+      "external_event_id": "bn-91194732"
+    }
+  ],
+  "pagination": {
+    "limit": 1,
+    "offset": 0,
+    "count": 1,
+    "has_more": true,
+    "next_offset": 1,
+    "next_cursor": "eyJlIjoiY2FtcGVvbmF0b19ncG9fYm9lcl9jYXJhem9fMjAyNi0wOC0yM19iMiIsImIiOiJiZXRhbm8iLCJtIjoicnVuX2xpbmUiLCJpIjoiMjA4MDIyOTUyMDgzNzczIiwicyI6MTc4NzUwNDQwMDAwMDAwMDAwMCwiZyI6MzkwNDI1LCJwIjoxMjUwNjQyMDY5ODIzNDE0NDM4fQ"
+  },
+  "updated_at": "2026-08-23T19:18:25.253305835Z"
+}

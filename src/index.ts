@@ -689,7 +689,16 @@ export interface AccountInfo {
 export interface OddsParams {
   sportsbook?: string | string[]
   add_sportsbook?: string | string[]
+  /**
+   * Filter by sport, e.g. `"baseball"`. Additive — the API has always honoured
+   * this on /odds (verified 2026-08-23) but it was never declared here, so a
+   * TypeScript caller could not filter by sport without a compile error while
+   * the Python SDK exposed it. Purely additive: no existing call breaks.
+   */
+  sport?: string | string[]
   league?: string | string[]
+  /** Filter by event id. Wire also accepts `event_id`; both are honoured. */
+  event?: string | string[]
   market?: string
   live?: boolean
   main?: boolean
@@ -866,7 +875,25 @@ class HttpClient {
         throw error
       }
 
-      return response.json() as Promise<T>
+      const payload = (await response.json()) as unknown
+
+      // A list endpoint with no matches sends an explicit `"data": null`, not
+      // `[]`. Because this client returns the parsed body by raw cast, that
+      // null reached callers typed as an array and `data.map(...)` threw
+      // `TypeError: Cannot read properties of null`. Seasonal, so it hides:
+      // `events.list({ league: 'nba', live: true })` throws all summer and
+      // appears to fix itself in October. Matches the Python SDK, which
+      // normalises the same case (SharpAPI-Python#23).
+      if (
+        payload !== null &&
+        typeof payload === 'object' &&
+        'data' in payload &&
+        (payload as { data: unknown }).data === null
+      ) {
+        ;(payload as { data: unknown }).data = []
+      }
+
+      return payload as T
     }
 
     throw lastNetworkError ?? new Error('Max retries exceeded')

@@ -1,0 +1,73 @@
+{
+  "data": [
+    {
+      "detected_at": "2026-08-23T19:18:31.228855609Z",
+      "estimated_net_profit_percent": 9.43,
+      "ev_available": false,
+      "ev_percentage": null,
+      "event_id": "mlb_orioles_rays_2026-08-23_b2",
+      "event_name": "Tampa Bay Rays @ Baltimore Orioles",
+      "id": "289c95c2557a5b29",
+      "implied_total": 91.22,
+      "is_alternate_line": false,
+      "is_live": true,
+      "is_player_prop": false,
+      "league": "mlb",
+      "league_label": "MLB",
+      "legs": [
+        {
+          "deep_link": "https://api.sharpapi.io/api/v1/deeplink/5356226495057?state=pa",
+          "external_event_id": "19863299",
+          "line": 5,
+          "market_id": "1549192848",
+          "odds_american": -105,
+          "odds_decimal": 1.952,
+          "odds_id": "5356226495057",
+          "odds_probability": 0.5122,
+          "selection": "Over",
+          "selection_id": "2270947108",
+          "sportsbook": "bwin",
+          "stake_percent": 56.15
+        },
+        {
+          "deep_link": "https://api.sharpapi.io/api/v1/deeplink/279977242140255?state=pa",
+          "external_event_id": "1634647431",
+          "line": 5,
+          "market_id": "1634647431_total_points_0_5.0",
+          "odds_american": 150,
+          "odds_decimal": 2.5,
+          "odds_id": "279977242140255",
+          "odds_probability": 0.4,
+          "selection": "Under",
+          "selection_id": "under",
+          "sportsbook": "pinnacle",
+          "stake_percent": 43.85
+        }
+      ],
+      "line": 5,
+      "market_label": "1st 5 Innings Total Runs",
+      "market_type": "1st_5_innings_total_runs",
+      "oldest_odds_age_seconds": 53.835974497,
+      "player_name": null,
+      "possibly_stale": true,
+      "profit_percent": 9.63,
+      "sport": "baseball",
+      "start_time": "2026-08-23T17:38:00Z",
+      "stat_category": null,
+      "warnings": [
+        "LIVE_HIGH_PROFIT_SUSPICIOUS",
+        "LIVE_GAME",
+        "LIVE_STALE_ODDS"
+      ]
+    }
+  ],
+  "pagination": {
+    "limit": 1,
+    "offset": 0,
+    "count": 1,
+    "total": 107,
+    "has_more": true,
+    "next_offset": 1
+  },
+  "updated_at": "2026-08-23T19:18:31.660581053Z"
+}
