@@ -1,0 +1,17 @@
+{
+  // The base tsconfig has `include: ["src"]` and `exclude: [..., "tests"]`, so
+  // `tsc --noEmit` does not typecheck the test suite at all — and vitest runs
+  // through esbuild, which strips types without checking them. Without this
+  // file a test can reference a field that does not exist and nothing says so.
+  //
+  // Kept separate rather than widening the base config: the base one drives the
+  // published build, and tests must not end up in dist/. `rootDir` is widened
+  // to the repo root because the base pins it to src/.
+  "extends": "./tsconfig.json",
+  "include": ["src", "tests"],
+  "exclude": ["node_modules", "dist"],
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  }
+}

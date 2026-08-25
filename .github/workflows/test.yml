@@ -23,3 +23,12 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npx tsc --noEmit
+      # The base tsconfig has include:["src"] and excludes tests/, and vitest runs
+      # through esbuild which strips types without checking them — so the suite was
+      # unchecked either way. This caught a real gap on its first run: OddsParams
+      # had no `sport` field even though the API honours it.
+      - run: npx tsc --noEmit -p tsconfig.test.json
+      # This workflow is named Tests and did not run any: vitest was a devDependency,
+      # `npm test` was defined in package.json, and `tests/` was gitignored so nothing
+      # could ever be committed for it to execute.
+      - run: npm test

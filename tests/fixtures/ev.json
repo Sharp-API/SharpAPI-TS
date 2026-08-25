@@ -1,0 +1,70 @@
+{
+  "data": [
+    {
+      "arb_available": false,
+      "arb_profit": 0,
+      "away_team": "Jenson Brooksby",
+      "book_count": 23,
+      "confidence": 90,
+      "cross_ref_count": 1,
+      "cross_ref_dispersion": null,
+      "deep_link": "https://api.sharpapi.io/api/v1/deeplink/99763362450489",
+      "detected_at": "2026-08-23T19:18:18.309537887Z",
+      "devig_method": "POWER",
+      "display_selection": "Jenson Brooksby",
+      "est_correction_s": 0,
+      "ev_percentage": 14.61,
+      "event_id": "tennis_men_giovanni_mpetshi_perricard_jenson_brooksby_2026-08-23",
+      "event_name": "Jenson Brooksby @ Giovanni Mpetshi Perricard",
+      "external_event_id": "2853370759613645111",
+      "fair_probability": 0.788,
+      "game_id": "tennis_men_giovanni_mpetshi_perricard_jenson_brooksby_2026-08-23",
+      "home_team": "Giovanni Mpetshi Perricard",
+      "id": "b9dbaf9f65a614cb",
+      "is_alternate_line": false,
+      "is_live": true,
+      "is_player_prop": false,
+      "kelly_percent": 32.15,
+      "league": "atp",
+      "line": null,
+      "market_id": "tennis_men_giovanni_mpetshi_perricard_jenson_brooksby_2026-08-23:moneyline",
+      "market_type": "moneyline",
+      "market_width": 2.933397899128365,
+      "no_vig_odds": -372,
+      "odds_american": -220,
+      "odds_decimal": 1.455,
+      "odds_probability": 0.6875,
+      "oldest_odds_age_seconds": 29.7,
+      "partner_fair_probability": 0.212,
+      "player_id": null,
+      "player_name": null,
+      "possibly_stale": false,
+      "quality_tier": "B",
+      "selection": "Away",
+      "selection_id": "moneyline:::B:Jenson Brooksby",
+      "sharp_book": "pinnacle",
+      "single_sharp_period": false,
+      "sport": "tennis",
+      "sportsbook": "hardrock",
+      "sportsbooks": [
+        "hardrock"
+      ],
+      "start_time": "2026-08-23T19:00:00Z",
+      "stat_category": null,
+      "team_side": "away",
+      "warnings": [
+        "SINGLE_SHARP_REF"
+      ]
+    }
+  ],
+  "pagination": {
+    "limit": 1,
+    "offset": 0,
+    "count": 1,
+    "total": 447,
+    "has_more": true,
+    "next_offset": 1,
+    "next_cursor": "eyJ2IjoxNC42MSwiaSI6IiJ9"
+  },
+  "updated_at": "2026-08-23T19:18:31.829899946Z"
+}
