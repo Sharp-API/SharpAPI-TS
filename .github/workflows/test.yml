@@ -2,9 +2,12 @@ name: Tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, "mergify/merge-queue/**"]
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -32,3 +35,4 @@ jobs:
       # `npm test` was defined in package.json, and `tests/` was gitignored so nothing
       # could ever be committed for it to execute.
       - run: npm test
+      - run: npm run build
