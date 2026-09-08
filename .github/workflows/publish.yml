@@ -8,6 +8,9 @@ on:
   # guarded against non-release triggers below.
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   # Mirror test.yml's Node matrix on the tagged commit: lint + typecheck
   # before publish. npm versions are immutable, so any gate we can apply
@@ -28,9 +31,13 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npx tsc --noEmit
+      - run: npx tsc --noEmit -p tsconfig.test.json
+      - run: npm test
 
   publish:
+    if: github.event_name == 'release' && startsWith(github.ref, 'refs/tags/v')
     needs: gate
+    environment: release
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -41,21 +48,18 @@ jobs:
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
-          node-version: "20"
+          node-version: "22"
           registry-url: "https://registry.npmjs.org"
 
       - run: npm ci
       - run: npx tsup
 
-      # OIDC trusted publishing needs npm CLI 11.5.1+; Node 20's bundled
-      # npm (10.8.2) predates that, so upgrade before the publish step.
-      # Pinned to the 11.x line, not @latest: npm 12 requires Node >=22,
-      # which this job doesn't run (confirmed via EBADENGINE 2026-08-18).
+      # Trusted publishing requires Node >=22.14 and npm >=11.5.1.
       - run: npm install -g npm@11
 
       - name: Publish to npm
         # Only publish on an actual release event. workflow_dispatch
-        # runs through test+build as a dry run but must not upload.
+        # runs the validation gate only; the protected job is skipped.
         #
         # Auth: OIDC trusted publisher (registered at
         # https://www.npmjs.com/package/@sharp-api/client/access). The

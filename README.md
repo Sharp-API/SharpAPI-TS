@@ -99,6 +99,9 @@ WebSocket is available natively in Node.js 21+ or via the `ws` package.
 
 ## Error Handling
 
+Authenticated REST requests reject HTTP redirects to protect API keys and request
+bodies. Configure `baseUrl` with the final API origin if your gateway redirects.
+
 ```typescript
 try {
   const { data } = await api.ev.get()
