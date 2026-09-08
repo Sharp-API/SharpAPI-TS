@@ -34,6 +34,10 @@ const { data: arbs } = await api.arbitrage.get({ min_profit: 1 })
 const { data: middles } = await api.middles.get({ league: 'nba' })
 ```
 
+## Runnable demo
+
+Try the [odds-comparison app](examples/odds-comparison/): compare DraftKings and FanDuel prices in your browser, with a free API key or clearly labeled synthetic sample data. Includes setup instructions and a screenshot.
+
 ## Resources
 
 | Resource | Methods | Tier |

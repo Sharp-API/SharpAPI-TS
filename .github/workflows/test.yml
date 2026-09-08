@@ -33,3 +33,4 @@ jobs:
       # Execute the committed regression tests on every supported Node version.
       - run: npm test
       - run: npm run build
+      - run: npm run test:demo
