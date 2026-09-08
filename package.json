@@ -53,7 +53,10 @@
     "typecheck": "tsc --noEmit",
     "lint": "biome check src",
     "format": "biome check --write src",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "demo": "npm run build && node examples/odds-comparison/server.mjs",
+    "demo:sample": "node examples/odds-comparison/server.mjs --sample",
+    "test:demo": "node --test examples/odds-comparison/demo-check.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.12",
