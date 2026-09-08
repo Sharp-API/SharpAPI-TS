@@ -6,14 +6,13 @@
 // the wire, so `league.name` is typed `string` and is `undefined` in practice.
 // The dominant cause is casing: the interfaces are camelCase, the wire is
 // snake_case, and `request()` returns the parsed body by raw cast with no key
-// transform. Three fields already carry doc comments saying exactly that; the
-// rest were never updated.
+// transform. The tests below track the remaining interface mismatches.
 //
 // Correcting those names is a breaking change to a published package and is
-// deliberately NOT in this file's scope. What is here:
+// outside this regression suite's scope. It covers:
 //
-//   1. the one unambiguous RUNTIME bug — `"data": null` on an empty list
-//   2. a ratchet that pins the known-wrong field set so it cannot grow
+//   1. the empty-list runtime bug — `"data": null` on an empty list
+//   2. a regression check that prevents the known interface mismatch set from growing
 //
 // Fixtures are real responses captured from the deployed API. Refresh them when
 // the wire changes on purpose; a failure here means the wire moved.
@@ -113,9 +112,8 @@ const wireKeys = (name: string): Set<string> => {
 
 // Pinned 2026-08-23. Each entry is a field the SDK declares that the deployed
 // API does not send — reading it yields `undefined`, with no error. This is a
-// RATCHET, not an approval: it fails if a new wrong field is added, and it
-// fails when a field is corrected, at which point the fix is to delete the
-// entry rather than to widen it.
+// regression baseline: adding a mismatch or correcting a field fails this check.
+// Remove corrected entries so the baseline shrinks as interfaces are fixed.
 const KNOWN_DRIFT: Record<string, { fixture: string; missing: string[] }> = {
   NormalizedOdds: {
     fixture: 'odds.json',

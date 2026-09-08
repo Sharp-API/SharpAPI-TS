@@ -61,13 +61,9 @@ jobs:
         # Only publish on an actual release event. workflow_dispatch
         # runs the validation gate only; the protected job is skipped.
         #
-        # Auth: OIDC trusted publisher (registered at
-        # https://www.npmjs.com/package/@sharp-api/client/access). The
-        # v0.4.2 release (2026-08-18) confirmed the provenance/OIDC half
-        # was already working — the failure was a NODE_AUTH_TOKEN
-        # automation token colliding with the package's access mode once
-        # that mode was tightened to disallow bypass-2FA tokens. Dropped
-        # the token entirely; npm CLI negotiates OIDC on its own now.
-        # --provenance still emits the SLSA attestation on top.
+        # OIDC trusted publishing is configured for @sharp-api/client.
+        # npm negotiates OIDC without NODE_AUTH_TOKEN; automation tokens can
+        # conflict with package access settings that disallow bypassing 2FA.
+        # --provenance adds the SLSA attestation.
         if: github.event_name == 'release'
         run: npm publish --provenance --access public

@@ -879,13 +879,10 @@ class HttpClient {
 
       const payload = (await response.json()) as unknown
 
-      // A list endpoint with no matches sends an explicit `"data": null`, not
-      // `[]`. Because this client returns the parsed body by raw cast, that
-      // null reached callers typed as an array and `data.map(...)` threw
-      // `TypeError: Cannot read properties of null`. Seasonal, so it hides:
-      // `events.list({ league: 'nba', live: true })` throws all summer and
-      // appears to fix itself in October. Matches the Python SDK, which
-      // normalises the same case (SharpAPI-Python#23).
+      // List endpoints can return explicit `"data": null` for empty results.
+      // Returning that value to callers typed as an array caused data.map(...)
+      // to throw a TypeError, including for seasonal filters with no matches.
+      // Normalize this case consistently with the Python SDK (SharpAPI-Python#23).
       if (
         payload !== null &&
         typeof payload === 'object' &&
@@ -1107,11 +1104,11 @@ export interface WebSocketFilters {
 /**
  * WebSocket Stream Manager for real-time odds updates
  *
- * Provides lower latency than SSE (~100ms vs 1-2s).
+ * Supports bidirectional communication over a persistent WebSocket connection.
  *
  * @example
  * ```typescript
- * const stream = api.stream.oddsWs({ sportsbooks: ['draftkings'] })
+ * const stream = api.stream.oddsWs({ sportsbook: ['draftkings'] })
  * stream.on('initial', ({ data }) => setOdds(data))
  * stream.on('odds_update', ({ data, source }) => updateOdds(source, data))
  * stream.connect()
@@ -1640,14 +1637,13 @@ class StreamResource {
   }
 
   /**
-   * Create WebSocket odds stream (lower latency than SSE)
+   * Create a bidirectional WebSocket odds stream
    *
    * Connects to wss://ws.sharpapi.io for real-time updates.
-   * Latency: ~100ms (vs 1-2s for SSE)
    *
    * @example
    * ```typescript
-   * const stream = api.stream.oddsWs({ sportsbooks: ['draftkings', 'fanduel'] })
+   * const stream = api.stream.oddsWs({ sportsbook: ['draftkings', 'fanduel'] })
    * stream.on('connected', ({ message, tier }) => console.log(message, tier))
    * stream.on('initial', ({ data }) => setAllOdds(data))
    * stream.on('odds_update', ({ data, source }) => updateBook(source, data))
