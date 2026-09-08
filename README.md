@@ -1,4 +1,4 @@
-# @sharp-api/client
+# SharpAPI TypeScript SDK
 
 [![npm](https://img.shields.io/npm/v/%40sharp-api%2Fclient?color=06b6d4)](https://www.npmjs.com/package/@sharp-api/client)
 [![license](https://img.shields.io/badge/license-MIT-06b6d4)](LICENSE)

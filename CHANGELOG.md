@@ -11,7 +11,7 @@ All notable changes to `@sharp-api/client` are documented here.
 
 ## 0.4.2 — 2026-07-02
 
-### Added — suspended-opportunity state (issue #13 / sharp-api-go #789)
+### Added — suspended-opportunity state (issue #13)
 
 - `EVOpportunity` gains optional `is_suspended` (`boolean`) and
   `suspended_since` (unix seconds, present only while suspended). When the
@@ -30,7 +30,7 @@ All notable changes to `@sharp-api/client` are documented here.
 
 ## 0.4.1 — 2026-06-02
 
-### Added — structured `team_side` + `market_segment` (issue #76 / #689)
+### Added — structured `team_side` + `market_segment`
 
 - `NormalizedOdds`, `EVOpportunity`, and `ClosingOdd` gain optional `team_side`
   (`'home' | 'away' | 'draw' | 'over' | 'under'`) and `market_segment`
@@ -48,19 +48,19 @@ All notable changes to `@sharp-api/client` are documented here.
 ### Changed
 
 - `NormalizedOdds.timestamp` documented as the **delivery / last-refreshed**
-  feed-freshness timestamp (advances every ingest cycle), matching OpticOdds'
-  `timestamp` — NOT a price-last-changed time. The API now populates this field
+  feed-freshness timestamp (advances every ingest cycle), rather than a
+  price-last-changed time. The API now populates this field
   (previously always `null`). The removed `odds_changed_at` / `last_seen_at` /
   `wire_received_at` were never modeled by this SDK, so no type change is
-  needed. (SHA-1048)
+  needed.
 
 ### Added
 
 - `NormalizedOdds.is_active` (boolean). `false` indicates the market is
-  suspended/closed with the price frozen — mirrors OpticOdds `locked-odds` but
-  as a queryable field. Absent on the wire is treated as `true`.
+  suspended/closed with the price frozen, exposed as a queryable field.
+  Absent on the wire is treated as `true`.
 - `'odds:locked'` `WebSocketEventType` — supplementary stream event carrying the
-  suspended subset of a delta (1:1 with OpticOdds `locked-odds`). The rows also
+  suspended subset of a delta. The rows also
   arrive in the normal odds update with `is_active: false`.
 
 ### Backward compatibility
