@@ -2,6 +2,13 @@
 
 All notable changes to `@sharp-api/client` are documented here.
 
+## 0.4.3 — Unreleased
+
+### Security
+
+- Authenticated REST requests now reject redirects, preventing credentials and request bodies from being forwarded to another origin.
+- Package publishing requires approval through the protected release environment.
+
 ## 0.4.2 — 2026-07-02
 
 ### Added — suspended-opportunity state (issue #13 / sharp-api-go #789)

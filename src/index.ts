@@ -825,6 +825,8 @@ class HttpClient {
         : { 'X-API-Key': this.apiKey }
     const init: RequestInit = {
       method,
+      // Custom API-key headers and request bodies must never follow redirects.
+      redirect: 'error',
       headers: {
         ...authHeaders,
         'Content-Type': 'application/json',
