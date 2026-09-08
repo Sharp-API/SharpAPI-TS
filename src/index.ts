@@ -304,29 +304,29 @@ export interface NormalizedOdds extends NestedRefs {
     | (string & {})
   /**
    * Raw structured side axis ("home" | "away" | "draw") decomposed out of the
-   * compound selectionType vocabulary (issue #76). Optional + additive — absent
+   * compound selectionType vocabulary. Optional + additive — absent
    * when the adapter didn't stamp it. Wire key is snake_case `team_side` (the
    * client returns raw JSON without key transforms). Prefer over parsing
    * compound selectionType prefixes like "home_over".
    */
   team_side?: 'home' | 'away' | 'draw' | 'over' | 'under'
-  /** Canonical contest slice ("full_game" | "1st_half" | ...) — issue #689. Wire key snake_case. */
+  /** Canonical contest slice ("full_game" | "1st_half" | ...). Wire key snake_case. */
   market_segment?: string
   odds: OddsValue
   line?: number
   eventStartTime: string
   /**
    * ISO 8601 — when SharpAPI last refreshed this odd through its pipeline
-   * (advances every ingest cycle). A feed-freshness / delivery signal matching
-   * OpticOdds' `timestamp`; NOT a price-last-changed time. (SHA-1048)
+   * (advances every ingest cycle). A feed-freshness / delivery signal,
+   * rather than a price-last-changed time.
    */
   timestamp: string
   isLive: boolean
   /**
    * `true` (default) = market open and bettable; `false` = market
-   * suspended/closed with the price frozen (mirrors OpticOdds `locked-odds`).
+   * suspended/closed with the price frozen.
    * Absent on the wire is treated as `true`. Wire key is snake_case
-   * `is_active` (the client returns raw JSON without key transforms). SHA-3803.
+   * `is_active` (the client returns raw JSON without key transforms).
    */
   is_active: boolean
   status: 'upcoming' | 'live' | 'ended'
@@ -347,9 +347,9 @@ export interface EVOpportunity extends NestedRefs {
   fairProbability: number
   evPercentage: number
   kellyPercent: number
-  /** Raw structured side axis ("home" | "away" | "draw") — issue #76. Optional; wire key snake_case `team_side`. */
+  /** Raw structured side axis ("home" | "away" | "draw"). Optional; wire key snake_case `team_side`. */
   team_side?: 'home' | 'away' | 'draw' | 'over' | 'under'
-  /** Canonical contest slice ("full_game" | "1st_half" | ...) — issue #689. Wire key snake_case. */
+  /** Canonical contest slice ("full_game" | "1st_half" | ...). Wire key snake_case. */
   market_segment?: string
   /**
    * True while this live opp's sharp reference is momentarily suspended: the bet is still
@@ -574,9 +574,9 @@ export interface ClosingOdd {
     | 'away_draw'
     | 'home_away'
     | (string & {})
-  /** Raw structured side axis ("home" | "away" | "draw") — issue #76. Optional + additive. */
+  /** Raw structured side axis ("home" | "away" | "draw"). Optional + additive. */
   team_side?: 'home' | 'away' | 'draw' | 'over' | 'under'
-  /** Canonical contest slice ("full_game" | "1st_half" | ...) — issue #689. */
+  /** Canonical contest slice ("full_game" | "1st_half" | ...). */
   market_segment?: string
   odds_american: number
   odds_decimal: number
