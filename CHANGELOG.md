@@ -4,6 +4,14 @@ All notable changes to `@sharp-api/client` are documented here.
 
 ## 0.4.3 — Unreleased
 
+### Fixed
+
+- `odds.get()`, `odds.best()` and `odds.comparison()` now send the event filter under
+  the API's canonical `event_id` query key. They previously sent `event`, a deprecated
+  alias whose sunset date has passed, so every call filtering by event came back with
+  `Deprecation`, `Sunset` and `Warning: 299` headers. The `event` field on `OddsParams`
+  is unchanged — no caller needs to change anything.
+
 ### Security
 
 - Authenticated REST requests now reject redirects, preventing credentials and request bodies from being forwarded to another origin.
