@@ -12,6 +12,11 @@
   "exclude": ["node_modules", "dist"],
   "compilerOptions": {
     "noEmit": true,
-    "rootDir": "."
+    "rootDir": ".",
+    // The tests import node builtins. @types/node was only ever reaching this
+    // program by accident: vitest 3's public types re-exported
+    // vite/dist/node/index.d.ts, which carries `/// <reference types="node" />`.
+    // vitest 5 no longer pulls that file in, so name the types explicitly.
+    "types": ["node"]
   }
 }
