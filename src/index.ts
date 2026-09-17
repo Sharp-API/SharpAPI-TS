@@ -1374,7 +1374,15 @@ class EventsResource {
 class OddsResource {
   constructor(private http: HttpClient) {}
 
-  /** Get odds snapshot */
+  /**
+   * Get odds snapshot.
+   *
+   * Results are ordered by event_start_time ascending, so page 1 is the
+   * earliest-starting events, not a sample of all books. A book whose events
+   * start later in the day is legitimately absent from page 1 and appears on a
+   * later page. Filter by sportsbook, league, or event_id to get coverage
+   * instead of a time window.
+   */
   async get(params?: OddsParams): Promise<APIResponse<NormalizedOdds[]>> {
     return this.http.get('/api/v1/odds', params as Record<string, unknown>)
   }
