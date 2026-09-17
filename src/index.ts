@@ -697,7 +697,10 @@ export interface OddsParams {
    */
   sport?: string | string[]
   league?: string | string[]
-  /** Filter by event id. Wire also accepts `event_id`; both are honoured. */
+  /**
+   * Filter by event id. Sent on the wire under the API's canonical
+   * `event_id` key — the field keeps the shorter name for compatibility.
+   */
   event?: string | string[]
   market?: string
   live?: boolean
@@ -1371,6 +1374,31 @@ class EventsResource {
   }
 }
 
+/**
+ * Rewrite the legacy `event` filter to the API's canonical `event_id`.
+ *
+ * The server accepts `event`, `events` and `event_ids` as aliases of
+ * `event_id`, but answers an alias request with `Deprecation: true`, a
+ * `Sunset` date that has already passed and a `Warning: 299` header, and
+ * counts it in its filter-alias migration metric. `buildUrl` copies this
+ * object straight into the query string, so the field name on `OddsParams`
+ * *is* the wire key — which put every SDK caller on the deprecated path.
+ *
+ * The field stays named `event`: renaming it would break every existing
+ * caller. Translating here keeps the public surface identical.
+ */
+function canonicalOddsParams(
+  params?: OddsParams,
+): Record<string, unknown> | undefined {
+  if (!params || params.event === undefined) {
+    return params as Record<string, unknown> | undefined
+  }
+  const { event, ...rest } = params
+  // `event_id` first so an explicitly supplied canonical key wins, matching
+  // the server's own canonical-over-alias precedence.
+  return { event_id: event, ...rest }
+}
+
 class OddsResource {
   constructor(private http: HttpClient) {}
 
@@ -1384,22 +1412,19 @@ class OddsResource {
    * instead of a time window.
    */
   async get(params?: OddsParams): Promise<APIResponse<NormalizedOdds[]>> {
-    return this.http.get('/api/v1/odds', params as Record<string, unknown>)
+    return this.http.get('/api/v1/odds', canonicalOddsParams(params))
   }
 
   /** Get best odds across books */
   async best(params?: OddsParams): Promise<APIResponse<NormalizedOdds[]>> {
-    return this.http.get('/api/v1/odds/best', params as Record<string, unknown>)
+    return this.http.get('/api/v1/odds/best', canonicalOddsParams(params))
   }
 
   /** Get odds comparison */
   async comparison(
     params?: OddsParams,
   ): Promise<APIResponse<Record<string, NormalizedOdds[]>>> {
-    return this.http.get(
-      '/api/v1/odds/comparison',
-      params as Record<string, unknown>,
-    )
+    return this.http.get('/api/v1/odds/comparison', canonicalOddsParams(params))
   }
 
   /** Batch get odds for multiple events */
