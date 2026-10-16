@@ -1,0 +1,16 @@
+{
+  "data": [
+    {
+      "id": "soccer",
+      "name": "Soccer",
+      "numerical_id": 24,
+      "event_count": 6335,
+      "live_count": 701,
+      "leagues": [
+        "1._bundesliga",
+        "1__liga"
+      ]
+    }
+  ],
+  "updated_at": "2026-08-23T19:18:25.253305835Z"
+}
