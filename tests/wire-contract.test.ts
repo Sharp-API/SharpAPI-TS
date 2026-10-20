@@ -117,7 +117,7 @@ const KNOWN_DRIFT: Record<string, { fixture: string; missing: string[] }> = {
     fixture: 'odds.json',
     missing: [
       'eventId', 'homeTeam', 'awayTeam', 'marketType', 'selectionType',
-      'team_side', 'market_segment', 'odds', 'eventStartTime', 'isLive', 'status',
+      'team_side', 'market_segment', 'season_type', 'odds', 'eventStartTime', 'isLive', 'status',
     ],
   },
   Sport: { fixture: 'sports.json', missing: ['slug', 'active', 'eventCount'] },
@@ -168,6 +168,6 @@ describe('declared fields vs the wire', () => {
       0,
     )
     const drifted = Object.values(KNOWN_DRIFT).reduce((n, d) => n + d.missing.length, 0)
-    expect({ drifted, total }).toEqual({ drifted: 42, total: 66 })
+    expect({ drifted, total }).toEqual({ drifted: 43, total: 67 })
   })
 })

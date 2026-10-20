@@ -6,6 +6,7 @@ All notable changes to `@sharp-api/client` are documented here.
 
 ### Added
 
+- `season_type` (`'Preseason'` or `'Regular Season'`, exported as `SeasonType`) on `Event` and `NormalizedOdds`, absent when the API does not know it, and a `season_type` filter on `events.list()`, `odds.get()` and the SSE stream params. WebSocket subscribe does not take it.
 - Requests now identify the SDK with a `User-Agent: sharpapi-ts/<version>` header in
   Node and other server runtimes. Browsers do not let a page set this header, so
   browser requests are unchanged.
