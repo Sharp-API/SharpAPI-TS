@@ -24,7 +24,7 @@ afterEach(() => vi.unstubAllGlobals())
 describe('season_type', () => {
   it('is sent on events and odds requests', async () => {
     const seen = recordUrls()
-    const api = new SharpAPI({ apiKey: 'sk_test' })
+    const api = new SharpAPI('sk_test')
     await api.events.list({ season_type: 'Preseason' })
     await api.odds.get({ season_type: 'Regular Season' })
     expect(new URL(seen[0]).searchParams.get('season_type')).toBe('Preseason')
@@ -35,7 +35,7 @@ describe('season_type', () => {
 
   it('is omitted when unset', async () => {
     const seen = recordUrls()
-    const api = new SharpAPI({ apiKey: 'sk_test' })
+    const api = new SharpAPI('sk_test')
     await api.events.list()
     await api.odds.get()
     for (const u of seen)
@@ -43,7 +43,7 @@ describe('season_type', () => {
   })
 
   it('is carried on the SSE odds stream query', () => {
-    const api = new SharpAPI({ apiKey: 'sk_test' })
+    const api = new SharpAPI('sk_test')
     const stream = api.stream.odds({ season_type: 'Preseason' })
     expect(JSON.stringify(stream)).toContain('season_type=Preseason')
   })
