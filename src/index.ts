@@ -279,6 +279,9 @@ export interface NestedRefs {
   sportsbook_ref?: EntityRef
 }
 
+/** Season phase as reported by the API. */
+export type SeasonType = 'Preseason' | 'Regular Season'
+
 /** Normalized odds from any sportsbook */
 export interface NormalizedOdds extends NestedRefs {
   id: string
@@ -320,6 +323,12 @@ export interface NormalizedOdds extends NestedRefs {
    */
   timestamp: string
   isLive: boolean
+  /**
+   * Season phase. Omitted by the API when unknown (a league without a
+   * calendar, a date outside it, or no start time); absent never means regular
+   * season. Wire key is snake_case `season_type`.
+   */
+  season_type?: SeasonType
   /**
    * `true` (default) = market open and bettable; `false` = market
    * suspended/closed with the price frozen.
@@ -574,6 +583,12 @@ export interface Event
   awayTeam: string
   startTime: string
   isLive: boolean
+  /**
+   * Season phase. Omitted by the API when unknown (a league without a
+   * calendar, a date outside it, or no start time); absent never means regular
+   * season. Wire key is snake_case `season_type`.
+   */
+  season_type?: SeasonType
   status: EventStatus
   /**
    * Present only on an `unconfirmed` event from `events.get()`, and only for a
@@ -731,6 +746,12 @@ export interface OddsParams {
   market?: string
   live?: boolean
   main?: boolean
+  /**
+   * Filter by season phase: `"Preseason"` or `"Regular Season"`
+   * (case-insensitive; `regular_season` also works). Rows with an unknown
+   * season type never match.
+   */
+  season_type?: SeasonType | (string & {})
   limit?: number
   offset?: number
 }
@@ -739,6 +760,12 @@ export interface EventsParams {
   sport?: string
   league?: string | string[]
   live?: boolean
+  /**
+   * Filter by season phase: `"Preseason"` or `"Regular Season"`
+   * (case-insensitive; `regular_season` also works). Rows with an unknown
+   * season type never match.
+   */
+  season_type?: SeasonType | (string & {})
   date?: string
   limit?: number
   offset?: number
@@ -782,6 +809,8 @@ export interface ClosingParams {
 export interface StreamParams {
   sportsbook?: string | string[]
   league?: string | string[]
+  /** Season phase filter for the SSE streams. An unknown value is reported in the stream's `filter_warning` rather than failing the connection. Not taken by WebSocket subscribe. */
+  season_type?: SeasonType | (string & {})
   eventId?: string
 }
 
