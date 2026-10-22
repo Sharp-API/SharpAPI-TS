@@ -10,6 +10,11 @@ All notable changes to `@sharp-api/client` are documented here.
 - Requests now identify the SDK with a `User-Agent: sharpapi-ts/<version>` header in
   Node and other server runtimes. Browsers do not let a page set this header, so
   browser requests are unchanged.
+- `EventStatus` type, exported: `'upcoming' | 'live' | 'final' | 'unconfirmed'`.
+- `Event.last_seen` (optional): on an `unconfirmed` event from `events.get()`, for a
+  key with the Game State add-on, the last score the live feed showed before it
+  dropped the game (`home_score`, `away_score`, `score_type`, `game_period`,
+  `game_clock`, `seen_at`). It is not a final result. Wire keys are snake_case.
 
 ### Changed
 
@@ -35,6 +40,12 @@ All notable changes to `@sharp-api/client` are documented here.
   every method that takes it, including `events.list()` and `middles.get()`. It was
   previously sent as `live`, a deprecated alias. The `live` field is unchanged — no
   caller needs to change anything.
+- `Event.status` declared `'upcoming' | 'live' | 'ended'`. The API never sends
+  `ended`, and the two states it does send besides those, `final` and
+  `unconfirmed`, were missing. It is now `EventStatus`. `events.get()` returns
+  `unconfirmed` for a game the live feed dropped before an end-of-game frame; no
+  list or filter carries it. Code that compared `status` with `'ended'` no longer
+  compiles; that comparison was never true.
 
 ### Security
 
