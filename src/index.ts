@@ -536,6 +536,34 @@ export interface Team {
   division?: string
 }
 
+/**
+ * Event lifecycle state.
+ *
+ * - `upcoming` / `live` — what `events.list()` returns unfiltered.
+ * - `final` — a completed event. The `/events` list returns it only under
+ *   the API's `?status=final` query (not a field of `EventsParams`);
+ *   `events.get()` returns it for any completed event.
+ * - `unconfirmed` — returned by `events.get()` only: the live feed dropped
+ *   the game before an end-of-game frame, so its last score is not known to
+ *   be the final one. No list or filter carries it.
+ */
+export type EventStatus = 'upcoming' | 'live' | 'final' | 'unconfirmed'
+
+/**
+ * Last score the live feed showed before it dropped an `unconfirmed` event.
+ * Wire keys are snake_case (the client returns raw JSON without key transforms).
+ */
+export interface EventLastSeen {
+  home_score: number
+  away_score: number
+  /** `"sets"` for set-scored sports (tennis, volleyball, ...), else `"points"`. */
+  score_type?: string
+  game_period?: string
+  game_clock?: string
+  /** ISO 8601 — when the live feed last showed the event. */
+  seen_at: string
+}
+
 /** Event info */
 export interface Event
   extends Omit<NestedRefs, 'market_ref' | 'sportsbook_ref'> {
@@ -546,7 +574,12 @@ export interface Event
   awayTeam: string
   startTime: string
   isLive: boolean
-  status: 'upcoming' | 'live' | 'ended'
+  status: EventStatus
+  /**
+   * Present only on an `unconfirmed` event from `events.get()`, and only for a
+   * key with the Game State add-on. It is not a final result.
+   */
+  last_seen?: EventLastSeen
 }
 
 /** Subscription tier identifier */
