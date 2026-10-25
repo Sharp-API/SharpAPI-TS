@@ -1,0 +1,68 @@
+{
+  "name": "@sharp-api/client",
+  "version": "0.4.3",
+  "description": "Official TypeScript/JavaScript client for the SharpAPI real-time sports betting odds API",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "author": "SharpAPI <hello@sharpapi.io>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Sharp-API/SharpAPI-TS"
+  },
+  "homepage": "https://sharpapi.io",
+  "bugs": "https://github.com/Sharp-API/SharpAPI-TS/issues",
+  "keywords": [
+    "sports-betting",
+    "odds",
+    "arbitrage",
+    "ev",
+    "expected-value",
+    "api",
+    "real-time",
+    "sse",
+    "websocket",
+    "pinnacle",
+    "sportsbook"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check src",
+    "format": "biome check --write src",
+    "prepublishOnly": "npm run build",
+    "demo": "npm run build && node examples/odds-comparison/server.mjs",
+    "demo:sample": "node examples/odds-comparison/server.mjs --sample",
+    "test:demo": "node --test examples/odds-comparison/demo-check.mjs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.12",
+    "@types/node": "^26.2.0",
+    "tsup": "^9.0.0",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.0"
+  }
+}

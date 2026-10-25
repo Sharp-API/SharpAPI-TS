@@ -1,0 +1,20 @@
+# Dependabot keeps SHA-pinned GitHub Actions fresh.
+#
+# Actions are pinned by full commit SHA so a moved tag cannot change what
+# runs. Pinned SHAs also freeze security fixes, so this config opens a weekly
+# PR that bumps any action whose upstream tag has moved, with the changelog
+# inlined. All action updates are grouped into one PR per week.
+#
+# Scope: github-actions only. npm dependencies receive Dependabot security
+# updates, which are enabled in the repository settings.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore(deps)"
