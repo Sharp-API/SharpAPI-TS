@@ -2,7 +2,7 @@
 
 All notable changes to `@sharp-api/client` are documented here.
 
-## 0.4.3 — Unreleased
+## 0.5.0 — 2026-11-01
 
 ### Added
 
@@ -55,7 +55,8 @@ All notable changes to `@sharp-api/client` are documented here.
 ### Security
 
 - Authenticated REST requests now reject redirects, preventing credentials and request bodies from being forwarded to another origin.
-- Package publishing requires approval through the protected release environment.
+- Packages are published only from a version tag, which only repository admins can
+  create, through a protected `release` environment that accepts no other ref.
 
 ## 0.4.2 — 2026-07-02
 

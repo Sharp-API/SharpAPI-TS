@@ -826,7 +826,7 @@ export interface StreamParams {
  *
  * Keep in step with the `version` field of package.json.
  */
-const SDK_VERSION = '0.4.3'
+const SDK_VERSION = '0.5.0'
 const SDK_USER_AGENT = `sharpapi-ts/${SDK_VERSION}`
 
 const RETRY_STATUSES = new Set([502, 503, 504])
