@@ -18,6 +18,11 @@ All notable changes to `@sharp-api/client` are documented here.
 
 ### Changed
 
+- A WebSocket close with code 1012 ("Service Restart", sent when SharpAPI updates its
+  servers) now emits a new `reconnecting` event instead of `error`, then reconnects as
+  before. Every deploy used to reach `error` handlers and logs as a failure. Code that
+  listened for `error` to notice these disconnects should listen for `reconnecting`;
+  every other unexpected close still emits `error`.
 - `package.json` now declares `engines: { node: ">=20" }`, up from `>=18`, matching
   the Node versions CI tests (20, 22 and 24). Node 18 reached end-of-life on
   2025-04-30. No code changed. On Node 18, npm prints an `EBADENGINE` warning at
