@@ -86,10 +86,15 @@ stream.on('connected', ({ message, tier }) => console.log(message))
 stream.on('initial', ({ data }) => setAllOdds(data))
 stream.on('odds_update', ({ data, source }) => updateOdds(source, data))
 stream.on('ev:detected', ({ data }) => handleEV(data))
+stream.on('reconnecting', ({ message }) => console.info(message))
 stream.on('error', ({ message }) => console.error(message))
 
 stream.connect()
 ```
+
+When SharpAPI updates its servers it closes WebSocket connections with code 1012
+("Service Restart"). The stream emits `reconnecting` for that close, not `error`,
+and reconnects on its own; any other unexpected close still emits `error`.
 
 ## Node.js
 

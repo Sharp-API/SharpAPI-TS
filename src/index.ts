@@ -826,7 +826,7 @@ export interface StreamParams {
  *
  * Keep in step with the `version` field of package.json.
  */
-const SDK_VERSION = '0.4.3'
+const SDK_VERSION = '0.5.0'
 const SDK_USER_AGENT = `sharpapi-ts/${SDK_VERSION}`
 
 const RETRY_STATUSES = new Set([502, 503, 504])
@@ -1136,6 +1136,7 @@ export type WebSocketEventType =
   | 'middles:expired'
   | 'heartbeat'
   | 'pong'
+  | 'reconnecting'
   | 'error'
 
 export interface WebSocketMessage<T = unknown> {
@@ -1166,6 +1167,13 @@ export interface WebSocketMessage<T = unknown> {
 }
 
 export type WebSocketEventHandler<T> = (message: WebSocketMessage<T>) => void
+
+/**
+ * WebSocket close code 1012, "Service Restart" (RFC 6455 7.4.1). SharpAPI
+ * closes with it when a deploy updates the server; the stream emits
+ * `reconnecting` for it, not `error`, and reconnects.
+ */
+const SERVICE_RESTART_CLOSE = 1012
 
 export interface WebSocketFilters {
   sportsbooks?: string[]
@@ -1279,6 +1287,19 @@ export class WebSocketStreamManager<T = unknown> {
       this.cleanup()
 
       if (event.code === 1000) return // Normal close
+
+      if (event.code === SERVICE_RESTART_CLOSE) {
+        // The server is being updated (a deploy). This is routine, not a
+        // failure: say so with `reconnecting` and reconnect, without an
+        // `error` that would land in the caller's error handling and logs.
+        this.emit({
+          type: 'reconnecting',
+          code: event.code,
+          message: event.reason || 'Server updating',
+        })
+        this.scheduleReconnect()
+        return
+      }
 
       // Emit error with server-provided reason if available
       this.emit({
@@ -1789,6 +1810,7 @@ class StreamResource {
    * stream.on('odds_update', ({ data, source }) => updateBook(source, data))
    * stream.on('ev:detected', ({ data }) => notifyEV(data))
    * stream.on('heartbeat', () => console.log('alive'))
+   * stream.on('reconnecting', ({ message }) => console.info(message)) // server update
    * stream.on('error', ({ message }) => console.error(message))
    * stream.connect()
    * ```
