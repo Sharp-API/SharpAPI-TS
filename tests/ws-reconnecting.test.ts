@@ -27,6 +27,12 @@ class FakeWebSocket {
     this.readyState = 3
     this.onclose?.({ code, reason })
   }
+  // A connection attempt the server refuses: the runtime fires error, then an
+  // abnormal close, without ever opening.
+  refuse(): void {
+    this.onerror?.()
+    this.closeWith(1006, '')
+  }
 }
 
 const URL = 'wss://ws.example.test/ws'
@@ -110,6 +116,114 @@ describe('WebSocket close 1012 (server updating)', () => {
     expect(seen.map((s) => [s.type, s.message.code])).toEqual([['error', 'ws_4001']])
     vi.advanceTimersByTime(60_000)
     expect(FakeWebSocket.instances).toHaveLength(1)
+    stream.disconnect()
+  })
+})
+
+describe('WebSocket retries after a 1012 (server updating)', () => {
+  beforeEach(() => {
+    FakeWebSocket.instances = []
+    vi.useFakeTimers()
+    vi.stubGlobal('WebSocket', FakeWebSocket)
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  const latest = () => FakeWebSocket.instances[FakeWebSocket.instances.length - 1]
+
+  it('keeps retrying past 5 attempts while the server is still updating, without error', () => {
+    const { stream, seen } = streamWithLog()
+    stream.connect()
+    latest().open()
+    latest().closeWith(1012, 'server updating')
+
+    // Ten refused attempts in a row: today's limit of 5 would have given up.
+    for (let i = 0; i < 10; i++) {
+      vi.advanceTimersByTime(30_000)
+      latest().refuse()
+    }
+    vi.advanceTimersByTime(30_000)
+
+    expect(FakeWebSocket.instances).toHaveLength(12)
+    expect(seen.filter((s) => s.type === 'error')).toEqual([])
+    expect(seen.every((s) => s.type === 'reconnecting')).toBe(true)
+    expect(seen).toHaveLength(11)
+    stream.disconnect()
+  })
+
+  it('caps the wait between attempts at 30 s', () => {
+    const { stream } = streamWithLog()
+    stream.connect()
+    latest().open()
+    latest().closeWith(1012, '')
+
+    // Waits 1, 2, 4, 8 and 16 s for the first five attempts, then 30 s.
+    for (const wait of [1_000, 2_000, 4_000, 8_000, 16_000]) {
+      vi.advanceTimersByTime(wait)
+      latest().refuse()
+    }
+    const before = FakeWebSocket.instances.length
+    vi.advanceTimersByTime(29_999)
+    expect(FakeWebSocket.instances).toHaveLength(before)
+    vi.advanceTimersByTime(1)
+    expect(FakeWebSocket.instances).toHaveLength(before + 1)
+    stream.disconnect()
+  })
+
+  it('returns to the normal limit once it has reconnected', () => {
+    const { stream, seen } = streamWithLog()
+    stream.connect()
+    latest().open()
+    latest().closeWith(1012, '')
+    vi.advanceTimersByTime(1_000)
+    latest().open()
+
+    // A later ordinary drop gets today's 5 attempts, then max_retries.
+    latest().closeWith(1006, '')
+    for (const wait of [1_000, 2_000, 4_000, 8_000, 16_000]) {
+      vi.advanceTimersByTime(wait)
+      latest().refuse()
+    }
+    vi.advanceTimersByTime(60_000)
+
+    expect(seen.map((s) => s.message.code).slice(-1)).toEqual(['max_retries'])
+    expect(FakeWebSocket.instances).toHaveLength(7)
+    stream.disconnect()
+  })
+
+  it('still gives up after 5 attempts on an ordinary drop', () => {
+    const { stream, seen } = streamWithLog()
+    stream.connect()
+    latest().open()
+    latest().closeWith(1006, '')
+    for (const wait of [1_000, 2_000, 4_000, 8_000, 16_000]) {
+      vi.advanceTimersByTime(wait)
+      latest().refuse()
+    }
+    vi.advanceTimersByTime(60_000)
+
+    expect(FakeWebSocket.instances).toHaveLength(6)
+    expect(seen.map((s) => s.message.code).slice(-1)).toEqual(['max_retries'])
+    stream.disconnect()
+  })
+
+  it('stops on an auth close during the update window', () => {
+    const { stream, seen } = streamWithLog()
+    stream.connect()
+    latest().open()
+    latest().closeWith(1012, '')
+    vi.advanceTimersByTime(1_000)
+    latest().open()
+    latest().closeWith(4001, 'unauthorized')
+    vi.advanceTimersByTime(120_000)
+
+    expect(FakeWebSocket.instances).toHaveLength(2)
+    expect(seen.map((s) => [s.type, s.message.code])).toEqual([
+      ['reconnecting', 1012],
+      ['error', 'ws_4001'],
+    ])
     stream.disconnect()
   })
 })
