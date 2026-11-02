@@ -94,7 +94,10 @@ stream.connect()
 
 When SharpAPI updates its servers it closes WebSocket connections with code 1012
 ("Service Restart"). The stream emits `reconnecting` for that close, not `error`,
-and reconnects on its own; any other unexpected close still emits `error`.
+and reconnects on its own. Until it is connected again it keeps retrying, waiting
+at most 30 seconds between attempts, and reports each refused attempt as
+`reconnecting` too. Any other unexpected close still emits `error`, and the stream
+gives up after 5 attempts.
 
 ## Node.js
 

@@ -826,7 +826,7 @@ export interface StreamParams {
  *
  * Keep in step with the `version` field of package.json.
  */
-const SDK_VERSION = '0.5.0'
+const SDK_VERSION = '0.5.1'
 const SDK_USER_AGENT = `sharpapi-ts/${SDK_VERSION}`
 
 const RETRY_STATUSES = new Set([502, 503, 504])
@@ -1171,9 +1171,13 @@ export type WebSocketEventHandler<T> = (message: WebSocketMessage<T>) => void
 /**
  * WebSocket close code 1012, "Service Restart" (RFC 6455 7.4.1). SharpAPI
  * closes with it when a deploy updates the server; the stream emits
- * `reconnecting` for it, not `error`, and reconnects.
+ * `reconnecting` for it, not `error`, and reconnects. Until it is connected
+ * again it keeps retrying, with no attempt limit.
  */
 const SERVICE_RESTART_CLOSE = 1012
+
+/** The longest wait between two reconnect attempts. */
+const MAX_RECONNECT_DELAY_MS = 30_000
 
 export interface WebSocketFilters {
   sportsbooks?: string[]
@@ -1202,6 +1206,9 @@ export class WebSocketStreamManager<T = unknown> {
   private maxReconnectAttempts = 5
   private reconnectDelay = 1000
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  // True from a 1012 close until the stream is connected again: while the
+  // server is updating, failed attempts are expected and don't count.
+  private serverUpdating = false
   private filters: WebSocketFilters | null = null
   private pingInterval: ReturnType<typeof setInterval> | null = null
 
@@ -1251,13 +1258,14 @@ export class WebSocketStreamManager<T = unknown> {
     }
 
     if (this.ws) {
-      this.disconnect()
+      this.teardown()
     }
 
     this.ws = new WebSocket(this.url)
 
     this.ws.onopen = () => {
       this.reconnectAttempts = 0
+      this.serverUpdating = false
 
       // Send subscribe message with filters
       const subscribeMsg: { type: string; filters?: WebSocketFilters } = {
@@ -1288,10 +1296,14 @@ export class WebSocketStreamManager<T = unknown> {
 
       if (event.code === 1000) return // Normal close
 
+      // Don't reconnect on permanent failures (auth, access, rate limit)
+      const NON_RETRIABLE = [4001, 4003, 4029]
+
       if (event.code === SERVICE_RESTART_CLOSE) {
         // The server is being updated (a deploy). This is routine, not a
         // failure: say so with `reconnecting` and reconnect, without an
         // `error` that would land in the caller's error handling and logs.
+        this.serverUpdating = true
         this.emit({
           type: 'reconnecting',
           code: event.code,
@@ -1301,6 +1313,19 @@ export class WebSocketStreamManager<T = unknown> {
         return
       }
 
+      if (this.serverUpdating && !NON_RETRIABLE.includes(event.code)) {
+        // An attempt made while the server is still updating was refused.
+        // Expected: keep saying `reconnecting` and keep trying.
+        this.emit({
+          type: 'reconnecting',
+          code: event.code,
+          message: 'Server updating',
+        })
+        this.scheduleReconnect()
+        return
+      }
+      this.serverUpdating = false
+
       // Emit error with server-provided reason if available
       this.emit({
         type: 'error',
@@ -1308,14 +1333,15 @@ export class WebSocketStreamManager<T = unknown> {
         message: event.reason || 'Connection closed',
       })
 
-      // Don't reconnect on permanent failures (auth, access, rate limit)
-      const NON_RETRIABLE = [4001, 4003, 4029]
       if (!NON_RETRIABLE.includes(event.code)) {
         this.scheduleReconnect()
       }
     }
 
     this.ws.onerror = () => {
+      // A refused attempt while the server is updating is reported by onclose
+      // as `reconnecting`; don't also raise an error for it.
+      if (this.serverUpdating) return
       this.emit({
         type: 'error',
         code: 'connection_error',
@@ -1334,7 +1360,10 @@ export class WebSocketStreamManager<T = unknown> {
   }
 
   private scheduleReconnect(): void {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+    if (
+      !this.serverUpdating &&
+      this.reconnectAttempts >= this.maxReconnectAttempts
+    ) {
       console.error('[SharpAPI] Max WebSocket reconnection attempts reached')
       this.emit({
         type: 'error',
@@ -1344,7 +1373,10 @@ export class WebSocketStreamManager<T = unknown> {
       return
     }
 
-    const delay = this.reconnectDelay * 2 ** this.reconnectAttempts
+    const delay = Math.min(
+      this.reconnectDelay * 2 ** this.reconnectAttempts,
+      MAX_RECONNECT_DELAY_MS,
+    )
     this.reconnectTimer = setTimeout(() => {
       this.reconnectAttempts++
       this.connect()
@@ -1375,6 +1407,14 @@ export class WebSocketStreamManager<T = unknown> {
    * Disconnect from the WebSocket server
    */
   disconnect(): this {
+    this.teardown()
+    this.serverUpdating = false
+    return this
+  }
+
+  // Close the socket and stop the timers, but keep the reconnect state:
+  // connect() uses this to replace the socket during a retry.
+  private teardown(): void {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
@@ -1386,8 +1426,6 @@ export class WebSocketStreamManager<T = unknown> {
       this.ws.close(1000) // Normal closure
       this.ws = null
     }
-
-    return this
   }
 
   /**

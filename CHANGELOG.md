@@ -2,6 +2,17 @@
 
 All notable changes to `@sharp-api/client` are documented here.
 
+## 0.5.1 — 2026-11-02
+
+### Changed
+
+- After a WebSocket close with code 1012 (server updating), the stream now keeps
+  retrying until it is connected again, instead of giving up after 5 attempts
+  (about 31 seconds). The wait between attempts doubles up to 30 seconds and stays
+  there, and refused attempts in that window emit `reconnecting`, not `error`.
+  Closes for auth, access and rate limits (4001, 4003, 4029) still stop it, and any
+  other dropped connection keeps the 5-attempt limit.
+
 ## 0.5.0 — 2026-11-01
 
 ### Added
