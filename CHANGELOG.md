@@ -10,6 +10,11 @@ All notable changes to `@sharp-api/client` are documented here.
   `NormalizedOdds`: the price an exchange selection last traded at, in the row's three price
   formats, and when. Exchanges only (Smarkets). The API sends all four or none; absent means no
   known trade. Most rows carry none, and a print can be hours or days old.
+- `is_team_total`, `team_name` and `team_side` on `LowHoldOpportunity`, the team-total keys the API has sent on every
+  low-hold row since 2026-11-16. `is_team_total` is `true` for every market type containing `team_total`. `team_name`
+  names the team whose total it is, and is `null` on rows that are not team totals. Both sides of a team-total row are
+  that team's total: the API does not list a team-total pair whose team it cannot name. `team_side` is `'home'` or
+  `'away'`, the row's `home_team` or `away_team`, and is absent when the team did not match one of the event's teams.
 
 ## 0.5.1 — 2026-11-02
 

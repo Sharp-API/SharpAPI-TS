@@ -1,0 +1,127 @@
+{
+  "data": [
+    {
+      "all_books": [
+        "prophetx",
+        "rebet"
+      ],
+      "away_team": "Colorado Buffaloes",
+      "confidence": 30,
+      "detected_at": "2026-11-16T06:19:58Z",
+      "event_id": "ncaaf_cincinnatibearcats_coloradobuffaloes_2026-11-21_b2",
+      "event_name": "Colorado Buffaloes @ Cincinnati Bearcats",
+      "hold_percentage": 1.54,
+      "home_team": "Cincinnati Bearcats",
+      "id": "976972c728d8522d",
+      "is_alternate_line": false,
+      "is_live": false,
+      "is_player_prop": false,
+      "is_team_total": true,
+      "league": "ncaaf",
+      "league_label": "NCAAF",
+      "line": 31.5,
+      "market_label": "Team Total",
+      "market_type": "team_total",
+      "odds_age_seconds": 111.3,
+      "player_name": null,
+      "possibly_stale": false,
+      "side1": {
+        "books": [
+          "rebet"
+        ],
+        "deep_link": "https://api.sharpapi.io/api/v1/deeplink/126490943303793",
+        "external_event_id": "sr:match:70919038",
+        "fair_probability": 0.531,
+        "line": 31.5,
+        "market_id": null,
+        "odds_american": -117,
+        "odds_decimal": 1.855,
+        "odds_probability": 0.5392,
+        "selection": "Cincinnati Bearcats over",
+        "selection_id": null
+      },
+      "side2": {
+        "books": [
+          "prophetx"
+        ],
+        "deep_link": "https://api.sharpapi.io/api/v1/deeplink/122648410416277",
+        "external_event_id": "1704742288",
+        "fair_probability": 0.469,
+        "line": 31.5,
+        "market_id": null,
+        "odds_american": 110,
+        "odds_decimal": 2.1,
+        "odds_probability": 0.4762,
+        "selection": "Cincinnati Bearcats Cincinnati Under",
+        "selection_id": null
+      },
+      "side3": null,
+      "sport": "football",
+      "start_time": "2026-11-21T17:00Z",
+      "stat_category": null,
+      "team_name": "Cincinnati Bearcats",
+      "team_side": "home"
+    },
+    {
+      "all_books": [
+        "novig",
+        "prophetx"
+      ],
+      "away_team": "Los Angeles Chargers",
+      "confidence": 41,
+      "detected_at": "2026-11-16T06:19:58Z",
+      "event_id": "nfl_chargers_ravens_2026-11-16_b3",
+      "event_name": "Los Angeles Chargers @ Baltimore Ravens",
+      "hold_percentage": 0.6,
+      "home_team": "Baltimore Ravens",
+      "id": "82edc1726d157fe1",
+      "is_alternate_line": false,
+      "is_live": false,
+      "is_player_prop": false,
+      "is_team_total": false,
+      "league": "nfl",
+      "league_label": "NFL",
+      "line": null,
+      "market_label": "Moneyline",
+      "market_type": "moneyline",
+      "odds_age_seconds": 45.6,
+      "player_name": null,
+      "possibly_stale": false,
+      "side1": {
+        "books": [
+          "prophetx"
+        ],
+        "deep_link": "https://api.sharpapi.io/api/v1/deeplink/88320643966998",
+        "external_event_id": "1700008838",
+        "fair_probability": 0.6824,
+        "line": null,
+        "market_id": null,
+        "odds_american": -219,
+        "odds_decimal": 1.457,
+        "odds_probability": 0.6865,
+        "selection": "Baltimore Ravens",
+        "selection_id": null
+      },
+      "side2": {
+        "books": [
+          "novig"
+        ],
+        "deep_link": "https://api.sharpapi.io/api/v1/deeplink/251019063442301",
+        "external_event_id": "01a1a3d7-a3ad-76c2-b6f7-21e14c9a50bc",
+        "fair_probability": 0.3176,
+        "line": null,
+        "market_id": null,
+        "odds_american": 213,
+        "odds_decimal": 3.13,
+        "odds_probability": 0.3195,
+        "selection": "Los Angeles Chargers",
+        "selection_id": null
+      },
+      "side3": null,
+      "sport": "football",
+      "start_time": "2026-11-17T01:15Z",
+      "stat_category": null,
+      "team_name": null
+    }
+  ]
+}

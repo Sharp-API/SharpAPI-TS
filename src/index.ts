@@ -493,6 +493,16 @@ export interface LowHoldOpportunity extends NestedRefs {
   market_type: string
   hold_percentage: number
   is_live?: boolean
+  /** Whether the market is a team total (every market type containing
+   * `team_total`). The API sends it on every row. */
+  is_team_total?: boolean
+  /** The team whose total this is, on a team-total row; `null` on every other
+   * row. Both sides of a team-total row are this team's total: a team-total
+   * pair whose team cannot be named is not listed. */
+  team_name?: string | null
+  /** Which of the row's `home_team` / `away_team` is `team_name`. Only on a
+   * team-total row whose team matched one of the event's teams. */
+  team_side?: 'home' | 'away'
   detected_at?: string
   [key: string]: unknown
 }
