@@ -118,6 +118,9 @@ const KNOWN_DRIFT: Record<string, { fixture: string; missing: string[] }> = {
     missing: [
       'eventId', 'homeTeam', 'awayTeam', 'marketType', 'selectionType',
       'team_side', 'market_segment', 'season_type', 'odds', 'eventStartTime', 'isLive', 'status',
+      // Optional, exchange rows only: the captured Pinnacle fixture has none. That they
+      // arrive under these names is the 'exchange last trade print' block below.
+      'last_trade_american', 'last_trade_decimal', 'last_trade_probability', 'last_trade_at',
     ],
   },
   Sport: { fixture: 'sports.json', missing: ['slug', 'active', 'eventCount'] },
@@ -168,6 +171,59 @@ describe('declared fields vs the wire', () => {
       0,
     )
     const drifted = Object.values(KNOWN_DRIFT).reduce((n, d) => n + d.missing.length, 0)
-    expect({ drifted, total }).toEqual({ drifted: 43, total: 67 })
+    expect({ drifted, total }).toEqual({ drifted: 47, total: 71 })
+  })
+})
+
+// --------------------------------------------------------------------------- //
+// 3. Exchange last trade print (API 4.19.0)
+// --------------------------------------------------------------------------- //
+
+// The four keys exactly as the API serializes them for a Smarkets trade at
+// 12.2% (the server's own serialization test uses these values). The captured
+// fixture carries none of them, so the row is a captured row plus the print.
+const LAST_TRADE_PRINT = {
+  last_trade_american: 720,
+  last_trade_decimal: 8.2,
+  last_trade_probability: 0.122,
+  last_trade_at: '2026-11-15T18:42:07Z',
+}
+
+describe('exchange last trade print on odds rows', () => {
+  it('the captured fixture carries no print, or the absent case below is vacuous', () => {
+    const rows = fixture('odds.json').data as Record<string, unknown>[]
+    expect(rows.length).toBeGreaterThan(0)
+    expect(rows.flatMap((r) => Object.keys(r)).filter((k) => k.startsWith('last_trade'))).toEqual([])
+  })
+
+  it('hands the four fields through under their wire names, typed', async () => {
+    const body = fixture('odds.json')
+    body.data = [{ ...body.data[0], sportsbook: 'smarkets', ...LAST_TRADE_PRINT }]
+    respondWith(body)
+    const res = await new SharpAPI('sk_test').odds.get({})
+    const row = res.data[0]
+    // Typed reads: these lines stop compiling if a field leaves NormalizedOdds.
+    const american: number | undefined = row.last_trade_american
+    const decimal: number | undefined = row.last_trade_decimal
+    const probability: number | undefined = row.last_trade_probability
+    const at: string | undefined = row.last_trade_at
+    expect({ american, decimal, probability, at }).toEqual({
+      american: 720,
+      decimal: 8.2,
+      probability: 0.122,
+      at: '2026-11-15T18:42:07Z',
+    })
+  })
+
+  it('a row without a print reads undefined for all four', async () => {
+    respondWith(fixture('odds.json'))
+    const res = await new SharpAPI('sk_test').odds.get({})
+    const row = res.data[0]
+    expect([
+      row.last_trade_american,
+      row.last_trade_decimal,
+      row.last_trade_probability,
+      row.last_trade_at,
+    ]).toEqual([undefined, undefined, undefined, undefined])
   })
 })
