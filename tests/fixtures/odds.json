@@ -20,6 +20,7 @@
       "is_live": true,
       "is_active": true,
       "timestamp": "2026-08-23T19:18:07.89281707Z",
+      "price_updated_at": "2026-08-23T16:52:10Z",
       "deep_link": "https://api.sharpapi.io/api/v1/deeplink/208022952083773",
       "market_id": "2921663017",
       "selection_id": "10262687592",

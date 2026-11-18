@@ -168,6 +168,6 @@ describe('declared fields vs the wire', () => {
       0,
     )
     const drifted = Object.values(KNOWN_DRIFT).reduce((n, d) => n + d.missing.length, 0)
-    expect({ drifted, total }).toEqual({ drifted: 43, total: 67 })
+    expect({ drifted, total }).toEqual({ drifted: 43, total: 68 })
   })
 })

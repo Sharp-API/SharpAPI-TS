@@ -322,6 +322,13 @@ export interface NormalizedOdds extends NestedRefs {
    * rather than a price-last-changed time.
    */
   timestamp: string
+  /**
+   * ISO 8601 — when this row's price last changed: a new price, line, live
+   * status or suspension, or an order-book / size change. It does not move when
+   * an unchanged row is re-read, so it tells a frozen price from a fresh one.
+   * Omitted when the API sends no change time. Wire key snake_case.
+   */
+  price_updated_at?: string
   isLive: boolean
   /**
    * Season phase. Omitted by the API when unknown (a league without a

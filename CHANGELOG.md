@@ -2,6 +2,12 @@
 
 All notable changes to `@sharp-api/client` are documented here.
 
+## Unreleased
+
+### Added
+
+- `price_updated_at` on `NormalizedOdds`: when the row's price last changed (a new price, line, live status or suspension, or an order-book / size change). Unlike `timestamp`, it does not move when an unchanged row is re-read, so it tells a price frozen for hours from one that just moved. Absent when the API sends no change time.
+
 ## 0.5.1 — 2026-11-02
 
 ### Changed
