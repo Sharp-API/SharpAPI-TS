@@ -176,7 +176,7 @@ describe('declared fields vs the wire', () => {
 })
 
 // --------------------------------------------------------------------------- //
-// 3. Exchange last trade print (API 4.19.0)
+// 3. Exchange last trade print
 // --------------------------------------------------------------------------- //
 
 // The four keys exactly as the API serializes them for a Smarkets trade at
