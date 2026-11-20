@@ -2,6 +2,15 @@
 
 All notable changes to `@sharp-api/client` are documented here.
 
+## Unreleased
+
+### Added
+
+- `last_trade_american`, `last_trade_decimal`, `last_trade_probability` and `last_trade_at` on
+  `NormalizedOdds`: the price an exchange selection last traded at, in the row's three price
+  formats, and when. Exchanges only (Smarkets). The API sends all four or none; absent means no
+  known trade. Most rows carry none, and a print can be hours or days old.
+
 ## 0.5.1 — 2026-11-02
 
 ### Changed
