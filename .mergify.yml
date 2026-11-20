@@ -14,10 +14,21 @@
 # older pull_request_rules + `queue` action validates cleanly but queues nothing.
 #
 # Nothing here releases or publishes: npm releases stay manual (publish.yml).
+#
+# Public-repository precautions:
+# - Only branches of this repository are merged here. A pull request from a
+#   fork is never queued, so the queue never pushes code from outside this
+#   repository to one of its branches, where push-triggered workflows run with
+#   this repository's context. A fork's pull request is merged by hand.
+# - The approval is a label. Only people with triage access or more can add
+#   labels, so a contributor from outside cannot approve their own change.
+# - Mergify commands posted in comments stay limited to people with write
+#   access (Mergify's default for every command) or this repository's bot.
 
 merge_protections_settings:
   auto_merge_conditions:
     - base = main
+    - head-repo-full-name = Sharp-API/SharpAPI-TS
     # The review verdict, bound to the app that publishes it: a check is
     # matched by name, so any installed app could post one with this name.
     - check-success = @sharp-resolver/sa-verdict
@@ -39,6 +50,7 @@ queue_rules:
   - name: default
     queue_conditions:
       - "#commits-behind < 50"
+      - head-repo-full-name = Sharp-API/SharpAPI-TS
       - check-success = @sharp-resolver/sa-verdict
       - check-success = test (20)
       - check-success = test (22)
