@@ -337,6 +337,25 @@ export interface NormalizedOdds extends NestedRefs {
    */
   is_active: boolean
   status: 'upcoming' | 'live' | 'ended'
+  /**
+   * Exchange last trade print: the price this selection last traded at on the
+   * exchange, in American format. Exchanges only (Smarkets). The API sends all
+   * four `last_trade_*` fields or none of them; absent means no known trade.
+   * Most rows carry none, and a print can be hours or days old on a thinly
+   * traded market: read `last_trade_at` before using the price. Wire keys are
+   * snake_case (the client returns raw JSON without key transforms).
+   */
+  last_trade_american?: number
+  /** The same last traded price in decimal format. */
+  last_trade_decimal?: number
+  /**
+   * The exchange's own figure for the last traded price, as an implied
+   * probability strictly between 0 and 1. The other two prices are converted
+   * from it.
+   */
+  last_trade_probability?: number
+  /** ISO 8601 UTC time of that trade. */
+  last_trade_at?: string
 }
 
 /** +EV (Expected Value) opportunity */
