@@ -38,7 +38,9 @@ merge_protections_settings:
     # CodeQL reports neutral, not success, on a pull request that changes no
     # code it analyzes, and main's branch rule already counts neutral as
     # passing. A failing CodeQL run still blocks.
-    - check-success-or-neutral = CodeQL
+    - or:
+        - check-success = CodeQL
+        - check-neutral = CodeQL
     - check-success = public-text
     - label = sa-approved
     - label != do-not-merge
@@ -55,7 +57,9 @@ queue_rules:
       - check-success = test (20)
       - check-success = test (22)
       - check-success = test (24)
-      - check-success-or-neutral = CodeQL
+      - or:
+          - check-success = CodeQL
+          - check-neutral = CodeQL
       - check-success = public-text
       - label = sa-approved
       - label != do-not-merge
