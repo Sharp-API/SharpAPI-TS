@@ -55,22 +55,55 @@ Try the [odds-comparison app](examples/odds-comparison/): compare DraftKings and
 
 ## SSE Streaming
 
+Handlers take the server's event names, and receive each payload as sent (wire
+keys, snake_case):
+
 ```typescript
+import type { StreamOddsRow } from '@sharp-api/client'
+
 const stream = api.stream.odds({ league: 'nba' })
+const odds = new Map<string, StreamOddsRow>()
 
-stream.on('initial', ({ data }) => {
-  console.log('Snapshot:', data)
+// A fresh connection sends a full snapshot; a resumed one replays what you missed.
+stream.on('connected', ({ data }) => {
+  if (!data.resumed) odds.clear()
 })
 
-stream.on('update', ({ data }) => {
-  console.log('Update:', data)
+// The snapshot arrives in chunks of complete rows.
+stream.on('snapshot', ({ data }) => {
+  for (const row of data.odds ?? []) odds.set(row.id, row)
 })
+
+// Updates are compact deltas: `id` plus the fields that change (price, line,
+// is_live, is_active, timestamp). Merge each into the row you hold; a row you
+// don't hold yet arrives complete.
+stream.on('odds:update', ({ data }) => {
+  for (const delta of data.odds) {
+    odds.set(delta.id, { ...odds.get(delta.id), ...delta })
+  }
+})
+
+stream.on('odds:removed', ({ data }) => {
+  for (const id of data.ids) odds.delete(id)
+})
+
+stream.on('snapshot:complete', ({ data }) => console.log('live', data.total_odds))
+stream.on('error', ({ data }) => console.error(data.message))
 
 stream.connect()
 
 // Later
 stream.disconnect()
 ```
+
+The odds stream also sends `odds:locked` (a market suspended, price frozen) and
+`book:status`. `api.stream.opportunities()` sends `snapshot` chunks, then
+`ev:detected` / `ev:expired`, and the same pair for `arb:`, `middles:` and
+`low_hold:` (upsert by `id` on `detected`, delete the `expired` ids).
+`api.stream.gamestate()` sends `gamestate:snapshot`, then a full slate on every
+`gamestate:update`. Every stream sends `heartbeat` every 30 seconds. A
+`displaced` event (a newer connection on the same API key took the stream) stops
+the stream without reconnecting.
 
 ## WebSocket Streaming
 

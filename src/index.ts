@@ -16,7 +16,7 @@
  *
  * // SSE Streaming (requires WebSocket add-on)
  * const stream = api.stream.odds({ league: 'NBA' })
- * stream.on('update', (data) => console.log(data))
+ * stream.on('odds:update', ({ data }) => console.log(data.book, data.odds))
  * stream.connect()
  * ```
  *
@@ -1014,20 +1014,254 @@ class HttpClient {
 // SSE Stream Manager
 // =============================================================================
 
-export type StreamEventType = 'initial' | 'update' | 'heartbeat' | 'error'
+/**
+ * A row as the SSE stream sends it, under its wire keys (snake_case). The
+ * stream does not convert rows to the camelCase types the REST helpers declare.
+ */
+export interface StreamRow {
+  id: string
+  [field: string]: unknown
+}
+
+/**
+ * An odds row on the SSE stream. In a `snapshot` chunk it is the full row.
+ * In `odds:update` and `odds:locked` it is usually a compact delta: only `id`
+ * and the fields that change (price, `line`, `is_live`, `is_active`,
+ * `timestamp`, and on exchanges `volume`, `volume_24h`, `open_interest`,
+ * `max_bet`). Merge it by `id` into the row the snapshot gave you, and never
+ * read a static field (`sportsbook`, `home_team`, `market_type`, ...) off it.
+ * A row whose `id` you do not hold yet arrives complete; store it as is.
+ */
+export interface StreamOddsRow extends StreamRow {
+  odds_american?: number
+  odds_decimal?: number
+  odds_probability?: number
+  line?: number | null
+  is_live?: boolean
+  /** `false`: the market is suspended and the price is frozen. */
+  is_active?: boolean
+  timestamp?: string
+}
+
+/** `connected`: sent first on every connection. */
+export interface StreamConnected {
+  stream_id: string
+  channel: string
+  filters?: Record<string, unknown>
+  /** `true` on a reconnect that presented a `Last-Event-ID`. */
+  reconnected?: boolean
+  /** `true`: missed odds events are replayed and no snapshot follows. */
+  resumed?: boolean
+  replayed_count?: number
+  fallback_reason?: string
+  [field: string]: unknown
+}
+
+/**
+ * `snapshot`: one chunk of the current data, sent after `connected`. Odds
+ * chunks carry `odds`; opportunity chunks carry their rows under `ev`,
+ * `arbitrage`, `middles` or `low_hold`. More chunks follow while `has_more`.
+ */
+export interface StreamSnapshotChunk {
+  odds?: StreamOddsRow[]
+  ev?: StreamRow[]
+  arbitrage?: StreamRow[]
+  middles?: StreamRow[]
+  low_hold?: StreamRow[]
+  count: number
+  total: number
+  offset: number
+  has_more: boolean
+}
+
+/**
+ * `snapshot:complete`: the snapshot is done and live events follow. On a
+ * reconnect, `mode: 'full_resync'` means the snapshot just received replaces
+ * all local state; `mode: 'resume'` means no snapshot was sent and your state
+ * is continuous.
+ */
+export interface StreamSnapshotComplete {
+  timestamp: string
+  books?: string[]
+  total_odds?: number
+  mode?: 'full_resync' | 'resume'
+  fallback_reason?: string
+  replayed_count?: number
+}
+
+/** `odds:update` and `odds:locked`. */
+export interface StreamOddsUpdate {
+  /** Compact deltas: merge each into your local odds by `id`. */
+  odds: StreamOddsRow[]
+  count: number
+  /** The sportsbook these rows belong to. */
+  book: string
+  /** `true` when more chunks of the same update follow. */
+  partial?: boolean
+  /** `true` on frames re-sent while a reconnect resumes. */
+  replay?: boolean
+}
+
+/** `odds:removed`: odds a sportsbook took down. Delete these ids. */
+export interface StreamOddsRemoved {
+  ids: string[]
+  count: number
+  book: string
+  replay?: boolean
+}
+
+/** `book:status`: a sportsbook stopped (`down`) or resumed (`up`) serving odds. */
+export interface StreamBookStatus {
+  type: 'book:status'
+  book: string
+  state: 'down' | 'up'
+  since: string
+}
+
+/**
+ * `ev:detected`, `arb:detected`, `middles:detected`, `low_hold:detected`:
+ * new or updated opportunities. Upsert each by `id`.
+ */
+export interface StreamOpportunitiesDetected {
+  opportunities: StreamRow[]
+  count: number
+  /** `ev`, `arbitrage`, `middles` or `low_hold`. */
+  type: string
+}
+
+/** `ev:expired`, `arb:expired`, `middles:expired`, `low_hold:expired`. */
+export interface StreamOpportunitiesExpired {
+  /** Ids to remove. */
+  expired: string[]
+  count: number
+  type: string
+}
+
+/**
+ * `gamestate:snapshot`, `gamestate:update` and `gamestate:final`. Each
+ * `gamestate:update` carries the full current live slate: replace local
+ * gamestate with it rather than merging.
+ */
+export interface StreamGameState {
+  data: Array<{ event_id: string; [field: string]: unknown }>
+}
+
+/** `heartbeat`: sent every 30 seconds. */
+export interface StreamHeartbeat {
+  timestamp: string
+  seq?: number
+  global_seq?: string
+  /** Per sportsbook, when it last sent anything (epoch milliseconds). */
+  book_updated_ms?: Record<string, number>
+  [field: string]: unknown
+}
+
+/**
+ * `displaced`: a newer connection on the same API key took the stream slot.
+ * The stream stops and does not reconnect, so the two sessions do not keep
+ * displacing each other.
+ */
+export interface StreamDisplaced {
+  code: string
+  message: string
+  reconnect: boolean
+  hint?: string
+  docs?: string
+}
+
+/**
+ * `error`. A frame the server sends has its `code` and `message`; a dropped
+ * connection has only `message: 'Connection error'`, and the stream then
+ * reconnects.
+ */
+export interface StreamError {
+  code?: string
+  message: string
+}
+
+/** Payload of each SSE event, by the event's name on the wire. */
+export interface StreamEventPayloads {
+  connected: StreamConnected
+  snapshot: StreamSnapshotChunk
+  'snapshot:complete': StreamSnapshotComplete
+  'odds:update': StreamOddsUpdate
+  'odds:locked': StreamOddsUpdate
+  'odds:removed': StreamOddsRemoved
+  'book:status': StreamBookStatus
+  'ev:detected': StreamOpportunitiesDetected
+  'ev:expired': StreamOpportunitiesExpired
+  'arb:detected': StreamOpportunitiesDetected
+  'arb:expired': StreamOpportunitiesExpired
+  'middles:detected': StreamOpportunitiesDetected
+  'middles:expired': StreamOpportunitiesExpired
+  'low_hold:detected': StreamOpportunitiesDetected
+  'low_hold:expired': StreamOpportunitiesExpired
+  'gamestate:snapshot': StreamGameState
+  'gamestate:update': StreamGameState
+  'gamestate:final': StreamGameState
+  /** A filter value the server dropped (for example an unknown `season_type`). */
+  filter_warning: Record<string, unknown>
+  /** Deltas were skipped while the client read too slowly: refetch or reconnect. */
+  resync_required: { reason: string; message: string }
+  displaced: StreamDisplaced
+  heartbeat: StreamHeartbeat
+  error: StreamError
+}
+
+/**
+ * The SSE stream's event names, exactly as the server sends them on the
+ * `event:` line. Before 0.6.0 this was `'initial' | 'update' | 'heartbeat' |
+ * 'error'`; the server never sent `initial` or `update`, so handlers on those
+ * names were never called. Use `snapshot` and `odds:update` instead.
+ */
+export type StreamEventType = keyof StreamEventPayloads
+
+// Every name above, registered on each connection. `error` is handled through
+// `onerror`, which also receives the connection's own error events.
+const STREAM_EVENT_NAMES: readonly Exclude<StreamEventType, 'error'>[] = [
+  'connected',
+  'snapshot',
+  'snapshot:complete',
+  'odds:update',
+  'odds:locked',
+  'odds:removed',
+  'book:status',
+  'ev:detected',
+  'ev:expired',
+  'arb:detected',
+  'arb:expired',
+  'middles:detected',
+  'middles:expired',
+  'low_hold:detected',
+  'low_hold:expired',
+  'gamestate:snapshot',
+  'gamestate:update',
+  'gamestate:final',
+  'filter_warning',
+  'resync_required',
+  'displaced',
+  'heartbeat',
+]
 
 export interface StreamEvent<T = unknown> {
   type: StreamEventType
   data: T
+  /** The payload's own `timestamp` when it has one, else the time received. */
   timestamp: string
 }
 
 export type StreamEventHandler<T> = (event: StreamEvent<T>) => void
 
-export class StreamManager<T = unknown> {
+/**
+ * An SSE stream. Handlers are typed by event name, so the type parameter is
+ * not used; it is kept so that existing `StreamManager<...>` annotations
+ * still compile.
+ */
+export class StreamManager<_T = unknown> {
   private url: string
   private eventSource: EventSource | null = null
-  private handlers: Map<StreamEventType, Set<StreamEventHandler<T>>> = new Map()
+  private handlers: Map<StreamEventType, Set<StreamEventHandler<unknown>>> =
+    new Map()
   private reconnectAttempts = 0
   private maxReconnectAttempts = 5
   private reconnectDelay = 1000
@@ -1037,33 +1271,53 @@ export class StreamManager<T = unknown> {
     this.url = url
   }
 
-  on(event: StreamEventType, handler: StreamEventHandler<T>): this {
+  on<E extends StreamEventType>(
+    event: E,
+    handler: StreamEventHandler<StreamEventPayloads[E]>,
+  ): this {
     let handlers = this.handlers.get(event)
     if (!handlers) {
       handlers = new Set()
       this.handlers.set(event, handlers)
     }
-    handlers.add(handler)
+    handlers.add(handler as StreamEventHandler<unknown>)
     return this
   }
 
-  off(event: StreamEventType, handler: StreamEventHandler<T>): this {
-    this.handlers.get(event)?.delete(handler)
+  off<E extends StreamEventType>(
+    event: E,
+    handler: StreamEventHandler<StreamEventPayloads[E]>,
+  ): this {
+    this.handlers.get(event)?.delete(handler as StreamEventHandler<unknown>)
     return this
   }
 
-  private emit(event: StreamEventType, data: T, timestamp?: string): void {
+  private emit(event: StreamEventType, data: unknown): void {
     const handlers = this.handlers.get(event)
     if (handlers) {
-      const streamEvent: StreamEvent<T> = {
+      const stamp = (data as { timestamp?: unknown } | null)?.timestamp
+      const streamEvent: StreamEvent<unknown> = {
         type: event,
         data,
-        timestamp: timestamp || new Date().toISOString(),
+        timestamp: typeof stamp === 'string' ? stamp : new Date().toISOString(),
       }
       handlers.forEach((handler) => {
         handler(streamEvent)
       })
     }
+  }
+
+  // Parses one named frame and hands it to that name's handlers.
+  private dispatch(name: StreamEventType, raw: string): unknown {
+    let data: unknown
+    try {
+      data = JSON.parse(raw)
+    } catch (err) {
+      console.error(`[SharpAPI] Failed to parse SSE ${name} event:`, err)
+      return undefined
+    }
+    this.emit(name, data)
+    return data
   }
 
   connect(): this {
@@ -1082,22 +1336,31 @@ export class StreamManager<T = unknown> {
       this.reconnectAttempts = 0
     }
 
-    this.eventSource.onmessage = (event) => {
-      try {
-        const parsed = JSON.parse(event.data)
-        const type = parsed.type === 'initial' ? 'initial' : 'update'
-        this.emit(type, parsed.data || parsed, parsed.timestamp)
-      } catch (err) {
-        console.error('[SharpAPI] Failed to parse SSE message:', err)
-      }
+    // The server names every event, and EventSource hands a named event only
+    // to listeners for that name: `onmessage` never sees them.
+    for (const name of STREAM_EVENT_NAMES) {
+      this.eventSource.addEventListener(name, (event) => {
+        const data = this.dispatch(name, (event as MessageEvent).data)
+        if (
+          name === 'displaced' &&
+          (data as StreamDisplaced)?.reconnect === false
+        ) {
+          // Reconnecting would take the slot back from the newer session,
+          // which would then take it back again.
+          this.disconnect()
+        }
+      })
     }
 
-    this.eventSource.addEventListener('heartbeat', () => {
-      this.emit('heartbeat', {} as T)
-    })
-
-    this.eventSource.onerror = () => {
-      this.emit('error', { message: 'Connection error' } as T)
+    // `onerror` gets both an `event: error` frame from the server (with data;
+    // the connection stays open) and a dropped connection (no data).
+    this.eventSource.onerror = (event) => {
+      const raw = (event as MessageEvent).data
+      if (typeof raw === 'string') {
+        this.dispatch('error', raw)
+        return
+      }
+      this.emit('error', { message: 'Connection error' })
       this.scheduleReconnect()
     }
 
@@ -1799,57 +2062,55 @@ class StreamResource {
     this.apiKey = http.apiKey
   }
 
-  /** Create odds stream (SSE) */
-  odds(params?: StreamParams): StreamManager<NormalizedOdds[]> {
-    const url = this.http.getStreamUrl('/api/v1/stream', {
-      ...params,
-      type: 'odds',
+  // The server reads the channel from `channel` and the event filter from
+  // `event_id`. It ignores `type` and `eventId`, so a stream sent with those
+  // got the default `opportunities` channel, unfiltered.
+  private sseUrl(channel: string, params?: StreamParams): string {
+    const { eventId, ...filters } = params ?? {}
+    return this.http.getStreamUrl('/api/v1/stream', {
+      ...filters,
+      channel,
+      event_id: eventId,
     } as Record<string, unknown>)
-    return new StreamManager(url)
   }
 
-  /** Create opportunities stream (EV + Arbitrage) - SSE */
-  opportunities(
-    params?: StreamParams,
-  ): StreamManager<{ ev: EVOpportunity[]; arbitrage: ArbitrageOpportunity[] }> {
-    const url = this.http.getStreamUrl('/api/v1/stream', {
-      ...params,
-      type: 'opportunities',
-    } as Record<string, unknown>)
-    return new StreamManager(url)
+  /**
+   * Create odds stream (SSE): `snapshot` chunks, `snapshot:complete`, then
+   * `odds:update` (compact deltas, merge by `id`), `odds:locked`,
+   * `odds:removed`, `book:status` and `heartbeat`.
+   */
+  odds(params?: StreamParams): StreamManager {
+    return new StreamManager(this.sseUrl('odds', params))
+  }
+
+  /**
+   * Create opportunities stream (SSE): `snapshot` chunks, then
+   * `ev:`/`arb:`/`middles:`/`low_hold:` `detected` and `expired` events.
+   */
+  opportunities(params?: StreamParams): StreamManager {
+    return new StreamManager(this.sseUrl('opportunities', params))
   }
 
   /** Create unified stream (odds + opportunities) - SSE */
-  all(params?: StreamParams): StreamManager<Record<string, unknown>> {
-    const url = this.http.getStreamUrl('/api/v1/stream', {
-      ...params,
-      type: 'all',
-    } as Record<string, unknown>)
-    return new StreamManager(url)
+  all(params?: StreamParams): StreamManager {
+    return new StreamManager(this.sseUrl('all', params))
   }
 
-  /** Create single event stream (SSE) */
-  event(
-    eventId: string,
-    params?: StreamParams,
-  ): StreamManager<NormalizedOdds[]> {
-    const url = this.http.getStreamUrl('/api/v1/stream', {
-      ...params,
-      type: 'odds',
-      eventId,
-    } as Record<string, unknown>)
-    return new StreamManager(url)
+  /** Create single event stream (SSE): the odds stream for one event. */
+  event(eventId: string, params?: StreamParams): StreamManager {
+    return new StreamManager(this.sseUrl('odds', { ...params, eventId }))
   }
 
   /**
    * Stream live game state updates — scores, period, clock — merged
    * across sportsbooks (SSE).
    *
-   * Emits `gamestate:snapshot` on connect, then `gamestate:update` /
-   * `gamestate:removed` events. Requires the Game State add-on or
-   * Enterprise tier.
+   * Emits `gamestate:snapshot` on connect, then `gamestate:update` (the
+   * full current slate each time: replace, don't merge) and
+   * `gamestate:final` when an event finishes. Requires the Game State
+   * add-on or Enterprise tier.
    */
-  gamestate(): StreamManager<GameStateMap> {
+  gamestate(): StreamManager {
     const url = this.http.getStreamUrl('/api/v1/stream/gamestate', {})
     return new StreamManager(url)
   }
@@ -1916,7 +2177,7 @@ class StreamResource {
  *
  * // Stream odds (requires WebSocket add-on)
  * const stream = api.stream.odds({ league: 'NBA' })
- * stream.on('update', ({ data }) => console.log(data))
+ * stream.on('odds:update', ({ data }) => console.log(data.book, data.odds))
  * stream.connect()
  * ```
  */

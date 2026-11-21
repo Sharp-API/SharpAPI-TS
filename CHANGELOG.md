@@ -11,6 +11,35 @@ All notable changes to `@sharp-api/client` are documented here.
   formats, and when. Exchanges only (Smarkets). The API sends all four or none; absent means no
   known trade. Most rows carry none, and a print can be hours or days old.
 
+### Fixed
+
+- SSE streams now deliver the server's events. The server names every SSE event
+  (`snapshot`, `odds:update`, `arb:detected`, ...), and the stream listened only
+  for unnamed messages, so apart from `heartbeat` no handler was ever called.
+- `api.stream.odds()`, `all()` and `event()` now get the channel they name. They
+  sent `type=` and `eventId=`, which the server ignores, so they streamed the
+  default opportunities channel, not filtered by event. The stream now sends
+  `channel=` and `event_id=`.
+- An `error` event from the server no longer makes the stream reconnect: the
+  connection stays open. A dropped connection still reconnects.
+- `displaced` with `reconnect: false` (a newer connection on the same API key took
+  the stream) now stops the stream instead of reconnecting and displacing the
+  newer one.
+
+### Changed
+
+- **Breaking:** `StreamEventType` is now the server's event names (`connected`,
+  `snapshot`, `snapshot:complete`, `odds:update`, `odds:locked`, `odds:removed`,
+  `book:status`, the `ev:`/`arb:`/`middles:`/`low_hold:` `detected` and `expired`
+  events, `gamestate:snapshot`, `gamestate:update`, `gamestate:final`,
+  `filter_warning`, `resync_required`, `displaced`, `heartbeat`, `error`). The
+  server never sent `initial` or `update`, so handlers on them were never
+  called: use `snapshot` and `odds:update`. `odds:update` rows are compact
+  deltas; merge each into the row from `snapshot` by `id`.
+- Handlers get the payload as sent, under wire keys, typed per event
+  (`StreamEventPayloads`). The SSE stream methods return `StreamManager` without
+  a row type; the type parameter is kept so existing annotations compile.
+
 ## 0.5.1 — 2026-11-02
 
 ### Changed
