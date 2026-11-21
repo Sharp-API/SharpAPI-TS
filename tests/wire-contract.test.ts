@@ -146,6 +146,8 @@ const KNOWN_DRIFT: Record<string, { fixture: string; missing: string[] }> = {
       'eventId', 'eventName', 'marketType', 'profitPercent', 'impliedTotal', 'detectedAt',
     ],
   },
+  // Row 0 of the fixture is a team-total row, so team_side is on the wire too.
+  LowHoldOpportunity: { fixture: 'low-hold.json', missing: [] },
 }
 
 describe('declared fields vs the wire', () => {
@@ -171,7 +173,7 @@ describe('declared fields vs the wire', () => {
       0,
     )
     const drifted = Object.values(KNOWN_DRIFT).reduce((n, d) => n + d.missing.length, 0)
-    expect({ drifted, total }).toEqual({ drifted: 47, total: 71 })
+    expect({ drifted, total }).toEqual({ drifted: 47, total: 83 })
   })
 })
 
