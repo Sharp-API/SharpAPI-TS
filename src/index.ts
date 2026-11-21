@@ -73,6 +73,32 @@ const DEFAULT_CONFIG = {
 // API Response Types
 // =============================================================================
 
+/** Optional body filters for `odds.batch()` */
+export interface OddsBatchFilters {
+  sportsbook?: string | string[]
+  market?: string | string[]
+  market_segment?: string
+  competition_ids?: string[]
+  include_futures?: boolean
+}
+
+/** One event group in a batch response; each odds row is a GET /odds row plus `market_label`. */
+export interface OddsBatchEvent {
+  event_id: string
+  event_name: string
+  sport: string
+  league: string
+  start_time: string
+  is_live: boolean
+  competition_ref?: unknown
+  odds: Array<NormalizedOdds & { market_label?: string }>
+}
+
+export interface OddsBatchResponse {
+  data: { events: OddsBatchEvent[]; missing_events: string[] }
+  updated_at?: string
+}
+
 /** Standard API response wrapper */
 export interface APIResponse<T> {
   data: T
@@ -1612,9 +1638,16 @@ class OddsResource {
     )
   }
 
-  /** Batch get odds for multiple events */
-  async batch(eventIds: string[]): Promise<APIResponse<NormalizedOdds[]>> {
-    return this.http.post('/api/v1/odds/batch', { event_ids: eventIds })
+  /**
+   * Batch get odds for multiple events. Rows are grouped by event:
+   * `res.data.events[i].odds` holds the rows, and `res.data.missing_events`
+   * lists requested ids that were not found.
+   */
+  async batch(
+    eventIds: string[],
+    filters?: OddsBatchFilters,
+  ): Promise<OddsBatchResponse> {
+    return this.http.post('/api/v1/odds/batch', { event_ids: eventIds, ...filters })
   }
 
   /**
