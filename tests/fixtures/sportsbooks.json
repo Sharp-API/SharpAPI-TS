@@ -9,16 +9,154 @@
       "is_sharp": false,
       "has_live_odds": true,
       "has_player_props": true,
+      "pricing_model": "back",
+      "is_pickem": false,
+      "has_limits": false,
       "regions": [
         "US"
       ],
       "requires_tier": "hobby",
       "status": "active",
-      "event_count": 3811,
-      "last_update": "2026-08-23T19:18:20.088232178Z",
-      "coming_soon": false
+      "event_count": 705,
+      "last_update": "2026-11-21T05:28:07.34625748Z",
+      "coming_soon": false,
+      "currently_serving": true,
+      "idle_reason": null,
+      "outage": null
+    },
+    {
+      "id": "smarkets_lay",
+      "display_name": "Smarkets (Lay)",
+      "short_name": "Smarkets (Lay)",
+      "numerical_id": 82,
+      "category": "exchange",
+      "is_sharp": false,
+      "has_live_odds": true,
+      "has_player_props": false,
+      "pricing_model": "lay",
+      "is_pickem": false,
+      "has_limits": true,
+      "regions": [
+        "UK",
+        "EU"
+      ],
+      "requires_tier": "hobby",
+      "status": "active",
+      "event_count": 207,
+      "last_update": "2026-11-21T05:26:32.624263038Z",
+      "coming_soon": false,
+      "currently_serving": true,
+      "idle_reason": null,
+      "outage": null
+    },
+    {
+      "id": "betfair_lay",
+      "display_name": "Betfair Exchange (Lay)",
+      "short_name": "Betfair Exchange (Lay)",
+      "numerical_id": 62,
+      "category": "exchange",
+      "is_sharp": false,
+      "has_live_odds": true,
+      "has_player_props": false,
+      "pricing_model": "lay",
+      "is_pickem": false,
+      "has_limits": null,
+      "regions": [
+        "UK",
+        "EU",
+        "AU"
+      ],
+      "requires_tier": "sharp",
+      "status": "inactive",
+      "event_count": 0,
+      "last_update": null,
+      "coming_soon": false,
+      "currently_serving": false,
+      "idle_reason": "paused",
+      "outage": null
+    },
+    {
+      "id": "draftkings_pick2",
+      "display_name": "DraftKings Pick6 (2 Pick)",
+      "short_name": "DraftKings Pick6 (2 Pick)",
+      "numerical_id": 83,
+      "category": "regional",
+      "is_sharp": false,
+      "has_live_odds": false,
+      "has_player_props": true,
+      "pricing_model": "back",
+      "is_pickem": true,
+      "has_limits": false,
+      "regions": [
+        "US"
+      ],
+      "requires_tier": "hobby",
+      "status": "active",
+      "event_count": 23,
+      "last_update": "2026-11-21T05:27:37.44154032Z",
+      "coming_soon": false,
+      "currently_serving": true,
+      "idle_reason": null,
+      "outage": null
+    },
+    {
+      "id": "draftkings_predictions",
+      "display_name": "DraftKings Predictions",
+      "short_name": "DraftKings Predictions",
+      "numerical_id": 87,
+      "category": "exchange",
+      "is_sharp": false,
+      "has_live_odds": false,
+      "has_player_props": false,
+      "pricing_model": "back",
+      "is_pickem": false,
+      "has_limits": null,
+      "regions": [
+        "US"
+      ],
+      "requires_tier": "hobby",
+      "status": "active",
+      "event_count": 0,
+      "last_update": null,
+      "coming_soon": false,
+      "currently_serving": false,
+      "idle_reason": "feed_gap",
+      "outage": {
+        "extended": true,
+        "unobserved_since": "2026-11-16T20:05:06Z",
+        "threshold_hours": 24
+      }
     }
   ],
-  "retired": [],
-  "updated_at": "2026-08-23T19:18:25.253305835Z"
+  "retired": [
+    {
+      "id": "betano",
+      "display_name": "Betano"
+    },
+    {
+      "id": "galera",
+      "display_name": "Galera.bet"
+    },
+    {
+      "id": "sportingbet_br",
+      "display_name": "Sportingbet BR"
+    },
+    {
+      "id": "unibet_be",
+      "display_name": "Unibet (Belgium)"
+    },
+    {
+      "id": "unibet_ca",
+      "display_name": "Unibet (Canada)"
+    },
+    {
+      "id": "unibet_de",
+      "display_name": "Unibet (Germany)"
+    },
+    {
+      "id": "unibet_ro",
+      "display_name": "Unibet (Romania)"
+    }
+  ],
+  "updated_at": "2026-11-21T05:28:07.394224451Z"
 }

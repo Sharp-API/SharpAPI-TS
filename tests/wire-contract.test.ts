@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { SharpAPI } from '../src/index'
+import { SharpAPI, type SportsbookOutage } from '../src/index'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const fixture = (name: string) =>
@@ -130,7 +130,14 @@ const KNOWN_DRIFT: Record<string, { fixture: string; missing: string[] }> = {
   },
   Sportsbook: {
     fixture: 'sportsbooks.json',
-    missing: ['name', 'slug', 'active', 'features'],
+    missing: [
+      // Deprecated: never sent. Kept so code that reads them still compiles.
+      'name', 'slug', 'active', 'features',
+      // Declared ahead of the API release that sends it, so the captured fixture
+      // cannot carry it yet. That it arrives under this name is the 'sportsbook
+      // logo' block below. Drop it from here when the fixture is recaptured.
+      'logo',
+    ],
   },
   EVOpportunity: {
     fixture: 'ev.json',
@@ -171,7 +178,7 @@ describe('declared fields vs the wire', () => {
       0,
     )
     const drifted = Object.values(KNOWN_DRIFT).reduce((n, d) => n + d.missing.length, 0)
-    expect({ drifted, total }).toEqual({ drifted: 47, total: 71 })
+    expect({ drifted, total }).toEqual({ drifted: 48, total: 89 })
   })
 })
 
@@ -225,5 +232,89 @@ describe('exchange last trade print on odds rows', () => {
       row.last_trade_probability,
       row.last_trade_at,
     ]).toEqual([undefined, undefined, undefined, undefined])
+  })
+})
+
+// --------------------------------------------------------------------------- //
+// 4. Sportsbook rows
+// --------------------------------------------------------------------------- //
+
+describe('sportsbook rows', () => {
+  it('every key on every captured row is declared on Sportsbook', () => {
+    const declared = new Set(declaredFields('Sportsbook'))
+    const rows = fixture('sportsbooks.json').data as Record<string, unknown>[]
+    const undeclared = rows.flatMap((r) => Object.keys(r)).filter((k) => !declared.has(k))
+    expect(undeclared).toEqual([])
+  })
+
+  it('a lay row, a paused row and a feed gap with an outage come through typed', async () => {
+    respondWith(fixture('sportsbooks.json'))
+    const res = await new SharpAPI('sk_test').sportsbooks.list()
+    const byId = new Map(res.data.map((b) => [b.id, b]))
+
+    const lay = byId.get('smarkets_lay')
+    expect(lay?.pricing_model).toBe('lay')
+    expect(byId.get('betonline')?.pricing_model).toBe('back')
+
+    const paused = byId.get('betfair_lay')
+    expect(paused?.idle_reason).toBe('paused')
+    expect(paused?.currently_serving).toBe(false)
+    expect(paused?.has_limits).toBeNull()
+    expect(paused?.outage).toBeNull()
+
+    const gap = byId.get('draftkings_predictions')
+    expect(gap?.idle_reason).toBe('feed_gap')
+    // Typed read: stops compiling if `outage` leaves Sportsbook or changes type.
+    const outage: SportsbookOutage | null | undefined = gap?.outage
+    expect(outage).not.toBeNull()
+    expect(Object.keys(outage ?? {}).sort()).toEqual(declaredFields('SportsbookOutage').sort())
+    expect(typeof outage?.extended).toBe('boolean')
+    expect(typeof outage?.unobserved_since).toBe('string')
+    expect(typeof outage?.threshold_hours).toBe('number')
+
+    expect(res.data.some((b) => b.is_pickem)).toBe(true)
+  })
+})
+
+// --------------------------------------------------------------------------- //
+// 5. Sportsbook logo
+// --------------------------------------------------------------------------- //
+
+// `logo` arrives with a coming API release, on every row: a link, or null when
+// the book has no logo yet. The captured fixture cannot carry it, so each row
+// below is a captured row plus the key. The link is an example value.
+const LOGO = 'https://example.com/logos/betonline.png'
+
+describe('sportsbook logo', () => {
+  it('the captured fixture carries no logo yet, or the absent case below is vacuous', () => {
+    const rows = fixture('sportsbooks.json').data as Record<string, unknown>[]
+    expect(rows.length).toBeGreaterThan(0)
+    expect(rows.filter((r) => 'logo' in r)).toEqual([])
+  })
+
+  it('a row with a logo link comes through typed and unchanged', async () => {
+    const body = fixture('sportsbooks.json')
+    body.data = [{ ...body.data[0], logo: LOGO }]
+    respondWith(body)
+    const res = await new SharpAPI('sk_test').sportsbooks.list()
+    // Typed read: stops compiling if `logo` leaves Sportsbook.
+    const logo: string | null | undefined = res.data[0].logo
+    expect(logo).toBe(LOGO)
+    expect(res.data[0]).toEqual(body.data[0])
+  })
+
+  it('a row with `logo: null` reads null, not undefined', async () => {
+    const body = fixture('sportsbooks.json')
+    body.data = [{ ...body.data[0], logo: null }]
+    respondWith(body)
+    const res = await new SharpAPI('sk_test').sportsbooks.list()
+    expect(res.data[0].logo).toBeNull()
+    expect(res.data[0]).toEqual(body.data[0])
+  })
+
+  it('a captured row, which has no key yet, reads undefined', async () => {
+    respondWith(fixture('sportsbooks.json'))
+    const res = await new SharpAPI('sk_test').sportsbooks.list()
+    expect(res.data[0].logo).toBeUndefined()
   })
 })

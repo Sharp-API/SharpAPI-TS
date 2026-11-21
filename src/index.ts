@@ -520,16 +520,118 @@ export interface League {
   numerical_id?: number
 }
 
-/** Sportsbook info */
+/**
+ * How long a sportsbook has had no data: the `outage` block on a
+ * {@link Sportsbook} row whose `idle_reason` is `'feed_gap'`.
+ */
+export interface SportsbookOutage {
+  /** `true` once the book has been unobserved for at least `threshold_hours`; `false` for a fresh gap. */
+  extended: boolean
+  /**
+   * UTC time (RFC 3339) from which SharpAPI has seen no data for the book.
+   * For a book that has never had data, the time SharpAPI started watching it.
+   */
+  unobserved_since: string
+  /** Hours without data after which `extended` becomes `true`. */
+  threshold_hours: number
+}
+
+/**
+ * One sportsbook, as listed by `sportsbooks.list()` (`GET /sportsbooks`).
+ * Keys are snake_case, exactly as the API sends them.
+ */
 export interface Sportsbook {
+  /** Unique identifier. Use it in API filters such as `sportsbook`. */
   id: string
-  name: string
-  slug: string
-  active: boolean
-  regions: string[]
-  features: string[]
-  /** Optional integer numerical ID, additive. */
+  /** Human-readable name. */
+  display_name: string
+  /** Short label for space-constrained displays; same as `display_name` when the book has no shorter label. */
+  short_name: string
+  /** Stable integer ID, never changed and never reused for another book. Omitted for a book that has none yet. */
   numerical_id?: number
+  /**
+   * Grouping label: `major_us`, `sharp`, `exchange` or `regional` today. More
+   * values may be added. Not the same as `is_sharp`.
+   */
+  category: string
+  /** Whether the book is considered a sharp, efficient market. */
+  is_sharp: boolean
+  /** Supports live (in-play) odds. */
+  has_live_odds: boolean
+  /** Supports player prop markets. */
+  has_player_props: boolean
+  /**
+   * Which side of the market the prices are for. `'back'` on an ordinary book:
+   * the price to bet on the selection. `'lay'` on an exchange's lay side: the
+   * price to bet against it, which cannot be compared with back prices. Read
+   * any value other than `'back'` as "not back prices".
+   */
+  pricing_model: 'back' | 'lay' | (string & {})
+  /**
+   * `true` for a daily fantasy pick'em product: its entries are not bets placed
+   * at the quoted price, so keep these books apart from sportsbooks when
+   * comparing prices. `false` on every other book.
+   */
+  is_pickem: boolean
+  /**
+   * Whether the book publishes per-selection bet limits (`max_bet` on odds
+   * rows): `true` when at least one row in its current snapshot carries
+   * `max_bet`, `false` when rows were observed and none do, `null` when no
+   * rows have been observed. `null` is not `false`.
+   */
+  has_limits: boolean | null
+  /** Regions the book covers: `US`, `UK`, `EU`, `AU`, `GLOBAL`. */
+  regions: string[]
+  /** Minimum subscription tier required for the book's data. */
+  requires_tier: 'free' | 'hobby' | 'pro' | 'sharp' | (string & {})
+  /** `'active'` or `'inactive'`; `'coming_soon'` for a book announced but not launched yet. */
+  status: 'active' | 'inactive' | 'coming_soon' | (string & {})
+  /** Number of matches (games) the book has odds for right now. Futures markets are not counted. */
+  event_count: number
+  /** ISO 8601 time of the book's last data update; `null` when there is none. */
+  last_update: string | null
+  /** `true` for a book that is announced but not launched yet. */
+  coming_soon: boolean
+  /**
+   * `true` when the book is backed by odds data the API is serving right now.
+   * `false` for a book not launched yet, an `inactive` book, or a selectable
+   * book with no data at the moment (see `idle_reason`). It does not say how
+   * long a book has been without data.
+   */
+  currently_serving: boolean
+  /**
+   * Why a book with no data has none, when known. `'no_demand'`: no customer
+   * has it selected, and selecting it starts it again. `'feed_gap'`: it is
+   * selected but has no data, because it is starting up or its feed is
+   * interrupted. `'paused'`: SharpAPI has temporarily switched it off; not an
+   * outage, no resume date. `null` in every other case; do not read it as a
+   * fault. More values may be added: treat one you do not recognise as `null`.
+   */
+  idle_reason: 'no_demand' | 'feed_gap' | 'paused' | (string & {}) | null
+  /**
+   * How long the book has had no data. An object only on a `'feed_gap'` row,
+   * and only when SharpAPI has evidence of when the data stopped; `null` on
+   * every other row.
+   */
+  outage: SportsbookOutage | null
+  /**
+   * Link to the book's logo, a square PNG; `null` when no logo is available
+   * for the book yet. Arrives with a coming API release; until then the key is
+   * absent and reads `undefined`.
+   */
+  logo?: string | null
+  /** @deprecated The API never sends `name`, so it reads `undefined`. Read `display_name`. */
+  name: string
+  /** @deprecated The API never sends `slug`, so it reads `undefined`. Read `id`. */
+  slug: string
+  /**
+   * @deprecated The API never sends `active`, so it reads `undefined`. Read
+   * `status === 'active'`, or `currently_serving` for whether the book has data
+   * right now.
+   */
+  active: boolean
+  /** @deprecated The API never sends `features`, so it reads `undefined`. It has no replacement. */
+  features: string[]
 }
 
 /** Market info, returned by reference market endpoints. */
