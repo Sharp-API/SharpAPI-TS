@@ -10,6 +10,30 @@ All notable changes to `@sharp-api/client` are documented here.
   `NormalizedOdds`: the price an exchange selection last traded at, in the row's three price
   formats, and when. Exchanges only (Smarkets). The API sends all four or none; absent means no
   known trade. Most rows carry none, and a print can be hours or days old.
+- `Sportsbook` now declares every field `sportsbooks.list()` returns, under its wire name:
+  `display_name`, `short_name`, `category`, `is_sharp`, `has_live_odds`, `has_player_props`,
+  `pricing_model`, `is_pickem`, `has_limits`, `requires_tier`, `status`, `event_count`,
+  `last_update`, `coming_soon`, `currently_serving`, `idle_reason` and `outage`. `regions` and
+  the optional `numerical_id` were already declared. `pricing_model` is `'back'` on an ordinary
+  book and `'lay'` on an exchange's lay side, whose prices cannot be compared with back prices.
+  `has_limits` is `null` when no rows have been observed, which is not `false`. `event_count`
+  counts matches only; futures are not counted. `idle_reason` is `'no_demand'`, `'feed_gap'`,
+  `'paused'` or `null`. `outage` is typed by the new exported `SportsbookOutage` (`extended`,
+  `unobserved_since`, `threshold_hours`): an object only on a `feed_gap` row when SharpAPI knows
+  when the data stopped, `null` on every other row.
+- `logo` (optional) on `Sportsbook`: a link to the book's logo, a square PNG, or `null` when the
+  book has no logo yet. It arrives with a coming API release; until then it reads `undefined`.
+- One way this can affect a build: code that builds its own `Sportsbook` object by hand, a test
+  mock for example, must now supply the newly required fields (every field above except `logo`
+  and `numerical_id`). Nothing changes at runtime: the client returns the same objects as before.
+
+### Deprecated
+
+- `name`, `slug`, `active` and `features` on `Sportsbook`. The API has never sent them, so each
+  reads `undefined`. Read `display_name` instead of `name`, `id` instead of `slug`, and
+  `status === 'active'` instead of `active` (or `currently_serving`, for whether the book has
+  data right now). `features` has no replacement. All four keep their old types, so code that
+  reads them still compiles.
 
 ## 0.5.1 — 2026-11-02
 
