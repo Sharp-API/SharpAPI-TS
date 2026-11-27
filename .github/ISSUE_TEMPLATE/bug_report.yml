@@ -1,0 +1,51 @@
+name: Bug report
+description: Something in the SDK does not work as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. For account, plan, billing or API key
+        questions, please use https://sharpapi.io/contact instead of an issue.
+  - type: input
+    id: version
+    attributes:
+      label: SDK version
+      description: Run `npm ls @sharp-api/client`
+      placeholder: "0.5.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Runtime
+      options:
+        - Node.js 20
+        - Node.js 22
+        - Node.js 24
+        - Browser
+        - Other (say which below)
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, and what happened instead. Include the error message or code if there is one.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Code to reproduce
+      description: The smallest piece of code that shows the problem. Replace your API key with a placeholder.
+      render: typescript
+    validations:
+      required: true
+  - type: checkboxes
+    id: no-secrets
+    attributes:
+      label: Before you submit
+      options:
+        - label: I removed API keys and personal data from this report
+          required: true

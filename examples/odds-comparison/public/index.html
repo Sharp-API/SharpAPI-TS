@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="A small, open-source odds comparison demo built with the SharpAPI TypeScript SDK.">
+  <title>Odds comparison · SharpAPI</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#comparison">Skip to odds</a>
+  <div class="page-shell">
+    <header class="site-header">
+      <a class="brand" href="https://sharpapi.io" aria-label="SharpAPI home"><span class="brand-mark" aria-hidden="true">ϟ</span><span>Sharp<span class="brand-light">API</span></span></a>
+      <nav aria-label="Resources"><a href="https://docs.sharpapi.io">Documentation <span aria-hidden="true">↗</span></a><a class="github-link" href="https://github.com/Sharp-API/SharpAPI-TS">GitHub <span aria-hidden="true">↗</span></a></nav>
+    </header>
+    <main>
+      <section class="hero" aria-labelledby="page-title">
+        <div class="eyebrow"><span class="small-line"></span> THE DEVELOPER PLAYGROUND</div>
+        <div class="hero-main"><div><h1 id="page-title">Two books.<br>One clear view.</h1><p class="hero-description">Compare moneyline odds across DraftKings and FanDuel.<br class="desktop-break"> A working example, powered by the SharpAPI TypeScript SDK.</p></div><a class="key-link" href="https://sharpapi.io/pricing">Get a free API key <span aria-hidden="true">↗</span></a></div>
+        <div class="hero-meta"><span>01 <span>REST API</span></span><span>02 <span>TYPE­SCRIPT SDK</span></span><span>03 <span>OPEN SOURCE</span></span></div>
+      </section>
+      <section class="workspace" aria-label="Odds comparison demo">
+        <div class="mode-banner" id="mode-banner"><span class="mode-dot" aria-hidden="true"></span><strong id="mode-label">CONNECTING</strong><span id="mode-description">Loading the demo data source…</span><span class="mode-tag" id="mode-tag">LOCAL DEMO</span></div>
+        <div class="toolbar">
+          <div class="league-control"><label for="league">LEAGUE</label><select id="league"><option value="mlb">MLB · Baseball</option><option value="nfl">NFL · Football</option><option value="nba">NBA · Basketball</option><option value="nhl">NHL · Hockey</option></select></div>
+          <fieldset class="format-control"><legend>ODDS FORMAT</legend><div class="segmented"><label><input type="radio" name="format" value="american" checked><span>American</span></label><label><input type="radio" name="format" value="decimal"><span>Decimal</span></label></div></fieldset>
+          <button type="button" id="refresh" class="refresh"><span class="refresh-icon" aria-hidden="true">↻</span><span id="refresh-label">Refresh odds</span></button>
+        </div>
+        <div class="summary"><div><strong id="event-count">—</strong><span> MATCHUPS</span></div><div><strong>2</strong><span> SPORTSBOOKS</span></div><div class="market-summary"><strong>Moneyline</strong><span> PRE-MATCH · FULL GAME</span></div><div class="fetch-summary"><span class="status-dot" aria-hidden="true"></span><span id="fetched-time">Awaiting first fetch</span></div></div>
+        <p class="coverage" id="coverage" hidden>Partial coverage: this view uses the first page from each sportsbook. More markets may be available through the API.</p>
+        <div id="comparison" class="comparison" tabindex="-1" aria-busy="true"><div class="state"><span class="loader" aria-hidden="true"></span><h2>Getting the board ready</h2><p>Fetching and matching prices from both sportsbooks.</p></div></div>
+        <div class="table-note"><span><span class="legend-dot" aria-hidden="true"></span> Best price = higher decimal odds for the same selection.</span><span>— means no price available.</span></div>
+      </section>
+      <section class="build-strip"><div class="code-symbol" aria-hidden="true">&lt;/&gt;</div><div><h2>Your next project starts here.</h2><p>Two SDK calls. Matched markets. A frontend you can make your own.</p></div><a href="https://github.com/Sharp-API/SharpAPI-TS/tree/main/examples/odds-comparison">Explore the source <span aria-hidden="true">↗</span></a></section>
+    </main>
+    <footer><span>Built with <a href="https://sharpapi.io">SharpAPI</a><span class="footer-separator"> / </span>Odds comparison demo</span><p id="data-disclaimer">Prices are for demonstration. No betting recommendations.</p></footer>
+  </div>
+  <div id="announcement" class="sr-only" role="status" aria-live="polite"></div>
+</body>
+</html>

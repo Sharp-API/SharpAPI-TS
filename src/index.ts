@@ -1,0 +1,2391 @@
+/**
+ * SharpAPI TypeScript SDK
+ *
+ * Official TypeScript/JavaScript client for the SharpAPI real-time sports odds API.
+ *
+ * @example
+ * ```typescript
+ * import { SharpAPI } from '@sharp-api/client'
+ *
+ * const api = new SharpAPI('sk_xxx')
+ *
+ * // REST API
+ * const odds = await api.odds.get({ league: 'NBA' })
+ * const arbitrage = await api.arbitrage.get()
+ * const ev = await api.ev.get({ min_ev: 3 })
+ *
+ * // SSE Streaming (requires WebSocket add-on)
+ * const stream = api.stream.odds({ league: 'NBA' })
+ * stream.on('odds:update', ({ data }) => console.log(data.book, data.odds))
+ * stream.connect()
+ * ```
+ *
+ * @packageDocumentation
+ */
+
+// =============================================================================
+// Configuration
+// =============================================================================
+
+/**
+ * How the SDK presents the API key on REST requests.
+ *
+ * - `'x-api-key'` (default): sends `X-API-Key: <apiKey>`. Matches the
+ *   historical behaviour of the SDK and is the recommended choice for
+ *   most users.
+ * - `'bearer'`: sends `Authorization: Bearer <apiKey>` instead. Use this
+ *   when the request travels through an IAM / SSO layer or an API
+ *   gateway / corporate proxy that strips custom headers (`X-*`) but
+ *   preserves the standard `Authorization` header.
+ *
+ * SSE and WebSocket auth are unaffected by this setting — those
+ * transports always pass the key as the `?api_key=` query parameter
+ * because browsers cannot set custom headers on `EventSource` or
+ * `WebSocket` connections.
+ */
+export type AuthMethod = 'x-api-key' | 'bearer'
+
+export interface SharpAPIConfig {
+  /** API key (sk_xxx format) */
+  apiKey: string
+  /** Base URL (default: https://api.sharpapi.io) */
+  baseUrl?: string
+  /** Request timeout in ms (default: 30000) */
+  timeout?: number
+  /**
+   * Auth header to use on REST requests (default: `'x-api-key'`).
+   *
+   * Set to `'bearer'` to send `Authorization: Bearer <apiKey>` instead
+   * of `X-API-Key: <apiKey>` — useful behind IAM / SSO layers and API
+   * gateways that strip non-standard headers. SSE and WebSocket
+   * transports are unaffected (they always use `?api_key=` query).
+   */
+  authMethod?: AuthMethod
+}
+
+const DEFAULT_CONFIG = {
+  baseUrl: 'https://api.sharpapi.io',
+  timeout: 30000,
+  authMethod: 'x-api-key' as AuthMethod,
+}
+
+// =============================================================================
+// API Response Types
+// =============================================================================
+
+/** Optional body filters for `odds.batch()` */
+export interface OddsBatchFilters {
+  sportsbook?: string | string[]
+  market?: string | string[]
+  market_segment?: string
+  competition_ids?: string[]
+  include_futures?: boolean
+}
+
+/** One event group in a batch response; each odds row is a GET /odds row plus `market_label`. */
+export interface OddsBatchEvent {
+  event_id: string
+  event_name: string
+  sport: string
+  league: string
+  start_time: string
+  is_live: boolean
+  competition_ref?: unknown
+  odds: Array<NormalizedOdds & { market_label?: string }>
+}
+
+export interface OddsBatchResponse {
+  data: { events: OddsBatchEvent[]; missing_events: string[] }
+  updated_at?: string
+}
+
+/** Standard API response wrapper */
+export interface APIResponse<T> {
+  data: T
+  meta?: {
+    count?: number
+    total?: number
+    pagination?: {
+      limit: number
+      offset: number
+      has_more: boolean
+    }
+    updated?: string
+  }
+}
+
+// =============================================================================
+// Error Codes
+// =============================================================================
+//
+// The canonical error-code set is defined server-side. Every HTTP error
+// response and every WebSocket "error" frame carries a `code` string
+// from one of the two unions below. When the server adds a new code,
+// mirror it here and in the Python SDK.
+
+/**
+ * HTTP API error codes — returned in the `error.code` field of non-2xx
+ * REST responses (see {@link APIError}).
+ *
+ * Note: `unauthorized` and `invalid_token` are distinct from
+ * `invalid_api_key`:
+ *   - `invalid_api_key`  — malformed or unknown `sk_...` API key on a
+ *                          regular API endpoint.
+ *   - `unauthorized`     — the caller is not permitted to use this
+ *                          endpoint.
+ *   - `invalid_token`    — a session token is invalid or expired.
+ */
+export type APIErrorCode =
+  | 'backpressure'
+  | 'concurrent_request_cap'
+  | 'disabled_api_key'
+  | 'expired_api_key'
+  | 'gone'
+  | 'internal_error'
+  | 'invalid_api_key'
+  | 'invalid_token'
+  | 'method_not_allowed'
+  | 'missing_api_key'
+  | 'not_found'
+  | 'not_ready'
+  | 'offset_too_large'
+  | 'rate_limited'
+  | 'service_unavailable'
+  | 'tier_restricted'
+  | 'too_many_streams'
+  | 'unauthorized'
+  | 'unknown_endpoint'
+  | 'upstream_error'
+  | 'validation_error'
+
+/**
+ * WebSocket frame error codes — carried in the `code` field of `"error"`
+ * messages sent over the WS stream (see {@link WebSocketMessage}). These
+ * are distinct from HTTP codes because the transport and recovery paths
+ * differ.
+ */
+export type WSErrorCode =
+  | 'already_authenticated'
+  | 'invalid_message'
+  | 'missing_channels'
+  | 'missing_token'
+  | 'not_authenticated'
+  | 'unknown_message_type'
+
+/**
+ * Runtime lookup table for every HTTP error code. Useful for exhaustive
+ * switch statements and runtime validation (e.g. `code in API_ERROR_CODES`).
+ */
+export const API_ERROR_CODES: Record<APIErrorCode, APIErrorCode> = {
+  backpressure: 'backpressure',
+  concurrent_request_cap: 'concurrent_request_cap',
+  disabled_api_key: 'disabled_api_key',
+  expired_api_key: 'expired_api_key',
+  gone: 'gone',
+  internal_error: 'internal_error',
+  invalid_api_key: 'invalid_api_key',
+  invalid_token: 'invalid_token',
+  method_not_allowed: 'method_not_allowed',
+  missing_api_key: 'missing_api_key',
+  not_found: 'not_found',
+  not_ready: 'not_ready',
+  offset_too_large: 'offset_too_large',
+  rate_limited: 'rate_limited',
+  service_unavailable: 'service_unavailable',
+  tier_restricted: 'tier_restricted',
+  too_many_streams: 'too_many_streams',
+  unauthorized: 'unauthorized',
+  unknown_endpoint: 'unknown_endpoint',
+  upstream_error: 'upstream_error',
+  validation_error: 'validation_error',
+} as const
+
+/** Runtime lookup table for every WebSocket-frame error code. */
+export const WS_ERROR_CODES: Record<WSErrorCode, WSErrorCode> = {
+  already_authenticated: 'already_authenticated',
+  invalid_message: 'invalid_message',
+  missing_channels: 'missing_channels',
+  missing_token: 'missing_token',
+  not_authenticated: 'not_authenticated',
+  unknown_message_type: 'unknown_message_type',
+} as const
+
+/**
+ * @deprecated The server collapsed `bad_request` and `invalid_request`
+ * into {@link APIErrorCode} `'validation_error'` on 2026-04-22. These
+ * aliases exist only for consumers still branching on the old strings —
+ * both resolve to `'validation_error'` at runtime. Will be removed in a
+ * future major release.
+ */
+export const DEPRECATED_API_ERROR_CODES = {
+  /** @deprecated Use `'validation_error'`. */
+  bad_request: 'validation_error',
+  /** @deprecated Use `'validation_error'`. */
+  invalid_request: 'validation_error',
+} as const
+
+/** Standard API error response */
+export interface APIError {
+  error: {
+    /** Canonical error code — one of {@link APIErrorCode}. Typed as a
+     * widened string to tolerate unknown future codes without breaking
+     * older SDK builds. */
+    code: APIErrorCode | (string & {})
+    message: string
+    retry_after?: number
+  }
+}
+
+/** Odds value in multiple formats */
+export interface OddsValue {
+  american: number
+  decimal: number
+  probability: number
+}
+
+// =============================================================================
+// Nested reference objects
+// =============================================================================
+//
+// These structured ref objects ship alongside the legacy flat fields on
+// every odds row, opportunity row, and reference-list row. All fields
+// are optional and additive — clients on older API versions simply see
+// `undefined` and behave identically.
+//
+// Wire format uses snake_case (`sport_ref`, `league_ref`, `market_ref`,
+// `sportsbook_ref`).
+
+/** Structured team reference attached to `home` / `away`.
+ *
+ * `abbreviation` is only present for team-sport entities; absent
+ * for individual-sport competitors (tennis players, MMA fighters, etc).
+ *
+ * Optional metadata fields (`logo`, `city`, `mascot`, `conference`,
+ * `division`) are populated for most major-league teams, but not all.
+ * All five are additive — older servers (and 0.3.0 client code) keep
+ * working unchanged. */
+export interface TeamRef {
+  id?: string
+  numerical_id?: number
+  name?: string
+  abbreviation?: string
+  logo?: string
+  city?: string
+  mascot?: string
+  conference?: string
+  division?: string
+}
+
+/** Structured sport reference attached to `sport_ref`. */
+export interface SportRef {
+  id?: string
+  name?: string
+  numerical_id?: number
+}
+
+/** Structured reference for league / market / sportsbook objects.
+ *
+ * Used by `league_ref`, `market_ref`, and `sportsbook_ref` on every
+ * odds, opportunity, and reference row. */
+export interface EntityRef {
+  id?: string
+  label?: string
+  numerical_id?: number
+}
+
+/** Optional structured-ref bundle attached to row-shaped responses
+ * (odds, EV, arbitrage, middles, low-hold, futures). All fields are
+ * additive and present only when the API surfaces them. */
+export interface NestedRefs {
+  home?: TeamRef
+  away?: TeamRef
+  sport_ref?: SportRef
+  league_ref?: EntityRef
+  market_ref?: EntityRef
+  sportsbook_ref?: EntityRef
+}
+
+/** Season phase as reported by the API. */
+export type SeasonType = 'Preseason' | 'Regular Season'
+
+/** Normalized odds from any sportsbook */
+export interface NormalizedOdds extends NestedRefs {
+  id: string
+  sportsbook: string
+  eventId: string
+  sport: string
+  league: string
+  homeTeam: string
+  awayTeam: string
+  marketType: string
+  selection: string
+  selectionType:
+    | 'home'
+    | 'away'
+    | 'over'
+    | 'under'
+    | 'draw'
+    | 'home_draw'
+    | 'away_draw'
+    | 'home_away'
+    | (string & {})
+  /**
+   * Raw structured side axis ("home" | "away" | "draw") decomposed out of the
+   * compound selectionType vocabulary. Optional + additive — absent
+   * when the source does not provide it. Wire key is snake_case `team_side` (the
+   * client returns raw JSON without key transforms). Prefer over parsing
+   * compound selectionType prefixes like "home_over".
+   */
+  team_side?: 'home' | 'away' | 'draw' | 'over' | 'under'
+  /** Canonical contest slice ("full_game" | "1st_half" | ...). Wire key snake_case. */
+  market_segment?: string
+  odds: OddsValue
+  line?: number
+  eventStartTime: string
+  /**
+   * ISO 8601 — when SharpAPI last refreshed this odd through its pipeline
+   * (advances every ingest cycle). A feed-freshness / delivery signal,
+   * rather than a price-last-changed time.
+   */
+  timestamp: string
+  isLive: boolean
+  /**
+   * Season phase. Omitted by the API when unknown (a league without a
+   * calendar, a date outside it, or no start time); absent never means regular
+   * season. Wire key is snake_case `season_type`.
+   */
+  season_type?: SeasonType
+  /**
+   * `true` (default) = market open and bettable; `false` = market
+   * suspended/closed with the price frozen.
+   * Absent on the wire is treated as `true`. Wire key is snake_case
+   * `is_active` (the client returns raw JSON without key transforms).
+   */
+  is_active: boolean
+  status: 'upcoming' | 'live' | 'ended'
+  /**
+   * Exchange last trade print: the price this selection last traded at on the
+   * exchange, in American format. Exchanges only (Smarkets). The API sends all
+   * four `last_trade_*` fields or none of them; absent means no known trade.
+   * Most rows carry none, and a print can be hours or days old on a thinly
+   * traded market: read `last_trade_at` before using the price. Wire keys are
+   * snake_case (the client returns raw JSON without key transforms).
+   */
+  last_trade_american?: number
+  /** The same last traded price in decimal format. */
+  last_trade_decimal?: number
+  /**
+   * The exchange's own figure for the last traded price, as an implied
+   * probability strictly between 0 and 1. The other two prices are converted
+   * from it.
+   */
+  last_trade_probability?: number
+  /** ISO 8601 UTC time of that trade. */
+  last_trade_at?: string
+}
+
+/** +EV (Expected Value) opportunity */
+export interface EVOpportunity extends NestedRefs {
+  eventId: string
+  eventName: string
+  sport: string
+  league: string
+  marketType: string
+  selection: string
+  sportsbook: string
+  odds: OddsValue
+  sharpOdds: OddsValue
+  sharpBook: string
+  fairProbability: number
+  evPercentage: number
+  kellyPercent: number
+  /** Raw structured side axis ("home" | "away" | "draw"). Optional; wire key snake_case `team_side`. */
+  team_side?: 'home' | 'away' | 'draw' | 'over' | 'under'
+  /** Canonical contest slice ("full_game" | "1st_half" | ...). Wire key snake_case. */
+  market_segment?: string
+  /**
+   * True while this live opp's sharp reference is momentarily suspended: the bet is still
+   * offered but the edge is hidden (never a stale EV%). The opp keeps its stable `id`, so it
+   * updates in-place on resume instead of flickering. Wire key snake_case `is_suspended`.
+   * Optional/additive — may be absent; treat a missing value as not suspended.
+   */
+  is_suspended?: boolean
+  /** Unix seconds when the suspension began; present only when `is_suspended` is true. Wire key snake_case. */
+  suspended_since?: number
+  detectedAt: string
+}
+
+/** Arbitrage opportunity leg */
+export interface ArbitrageLeg {
+  sportsbook: string
+  selection: string
+  selectionType: string
+  odds: OddsValue
+  stakePercent: number
+  /** Structured book ref (optional, additive). */
+  sportsbook_ref?: EntityRef
+}
+
+/** Arbitrage opportunity */
+export interface ArbitrageOpportunity extends NestedRefs {
+  eventId: string
+  eventName: string
+  sport: string
+  league: string
+  marketType: string
+  profitPercent: number
+  impliedTotal: number
+  legs: ArbitrageLeg[]
+  detectedAt: string
+}
+
+/**
+ * Live game state for one event, merged across sportsbooks.
+ *
+ * Returned by `/api/v1/gamestate` and the `gamestate` stream channel.
+ * Scores are consensus-merged with period-guarded outlier rejection;
+ * `gamePeriod` / `gameClock` are picked from the most-advanced book.
+ *
+ * Not present on EV / arbitrage / low-hold rows — correlate by `event_id`.
+ *
+ * Forward-compatible: source-specific fields pass through unchanged via
+ * the index signature, so unknown fields are preserved rather than dropped.
+ */
+export interface GameState {
+  home_score?: number | null
+  away_score?: number | null
+  game_period?: string | null
+  game_clock?: string | null
+  home_team?: string | null
+  away_team?: string | null
+  sport?: string | null
+  primary_book?: string | null
+  book_count?: number | null
+  /** The primary book has stopped sending updates for this event. */
+  stale?: boolean
+  /** Game state for this sport has stopped updating. */
+  aggregator_stale?: boolean
+  /** Source-specific fields are preserved on the wire. */
+  [key: string]: unknown
+}
+
+/**
+ * Response shape for `/api/v1/gamestate`:
+ * `{ basketball: { evt_abc: GameState, ... }, football: { ... } }`.
+ */
+export type GameStateMap = Record<string, Record<string, GameState>>
+
+/** Middle opportunity */
+export interface MiddleOpportunity extends NestedRefs {
+  id: string
+  event_id: string
+  event_name: string
+  sport: string
+  league: string
+  market_type: string
+  home_team: string
+  away_team: string
+  side1: {
+    book: string
+    selection: string
+    line: number
+    odds: { american: number; decimal: number; probability: number }
+    stake_percent: number
+  }
+  side2: {
+    book: string
+    selection: string
+    line: number
+    odds: { american: number; decimal: number; probability: number }
+    stake_percent: number
+  }
+  middle_size: number
+  middle_numbers: number[]
+  middle_probability: number
+  expected_value: number
+  quality_score: number
+  is_live: boolean
+  detected_at: string
+}
+
+/** Low-hold opportunity (low-vig market). Typed shape so nested refs
+ * surface alongside the existing flat fields. */
+export interface LowHoldOpportunity extends NestedRefs {
+  id: string
+  event_id?: string
+  event_name: string
+  sport: string
+  league?: string
+  market_type: string
+  hold_percentage: number
+  is_live?: boolean
+  /** Whether the market is a team total (every market type containing
+   * `team_total`). The API sends it on every row. */
+  is_team_total?: boolean
+  /** The team whose total this is, on a team-total row; `null` on every other
+   * row. Both sides of a team-total row are this team's total: a team-total
+   * pair whose team cannot be named is not listed. */
+  team_name?: string | null
+  /** Which of the row's `home_team` / `away_team` is `team_name`. Only on a
+   * team-total row whose team matched one of the event's teams. */
+  team_side?: 'home' | 'away'
+  detected_at?: string
+  [key: string]: unknown
+}
+
+/** Sport info */
+export interface Sport {
+  id: string
+  name: string
+  slug: string
+  active: boolean
+  eventCount?: number
+  /** Optional integer numerical ID, additive. */
+  numerical_id?: number
+}
+
+/** League info */
+export interface League {
+  id: string
+  name: string
+  slug: string
+  sportId: string
+  country?: string
+  active: boolean
+  /** Optional integer numerical ID, additive. */
+  numerical_id?: number
+}
+
+/**
+ * How long a sportsbook has had no data: the `outage` block on a
+ * {@link Sportsbook} row whose `idle_reason` is `'feed_gap'`.
+ */
+export interface SportsbookOutage {
+  /** `true` once the book has been unobserved for at least `threshold_hours`; `false` for a fresh gap. */
+  extended: boolean
+  /**
+   * UTC time (RFC 3339) from which SharpAPI has seen no data for the book.
+   * For a book that has never had data, the time SharpAPI started watching it.
+   */
+  unobserved_since: string
+  /** Hours without data after which `extended` becomes `true`. */
+  threshold_hours: number
+}
+
+/**
+ * One sportsbook, as listed by `sportsbooks.list()` (`GET /sportsbooks`).
+ * Keys are snake_case, exactly as the API sends them.
+ */
+export interface Sportsbook {
+  /** Unique identifier. Use it in API filters such as `sportsbook`. */
+  id: string
+  /** Human-readable name. */
+  display_name: string
+  /** Short label for space-constrained displays; same as `display_name` when the book has no shorter label. */
+  short_name: string
+  /** Stable integer ID, never changed and never reused for another book. Omitted for a book that has none yet. */
+  numerical_id?: number
+  /**
+   * Grouping label: `major_us`, `sharp`, `exchange` or `regional` today. More
+   * values may be added. Not the same as `is_sharp`.
+   */
+  category: string
+  /** Whether the book is considered a sharp, efficient market. */
+  is_sharp: boolean
+  /** Supports live (in-play) odds. */
+  has_live_odds: boolean
+  /** Supports player prop markets. */
+  has_player_props: boolean
+  /**
+   * Which side of the market the prices are for. `'back'` on an ordinary book:
+   * the price to bet on the selection. `'lay'` on an exchange's lay side: the
+   * price to bet against it, which cannot be compared with back prices. Read
+   * any value other than `'back'` as "not back prices".
+   */
+  pricing_model: 'back' | 'lay' | (string & {})
+  /**
+   * `true` for a daily fantasy pick'em product: its entries are not bets placed
+   * at the quoted price, so keep these books apart from sportsbooks when
+   * comparing prices. `false` on every other book.
+   */
+  is_pickem: boolean
+  /**
+   * Whether the book publishes per-selection bet limits (`max_bet` on odds
+   * rows): `true` when at least one row in its current snapshot carries
+   * `max_bet`, `false` when rows were observed and none do, `null` when no
+   * rows have been observed. `null` is not `false`.
+   */
+  has_limits: boolean | null
+  /** Regions the book covers: `US`, `UK`, `EU`, `AU`, `GLOBAL`. */
+  regions: string[]
+  /** Minimum subscription tier required for the book's data. */
+  requires_tier: 'free' | 'hobby' | 'pro' | 'sharp' | (string & {})
+  /** `'active'` or `'inactive'`; `'coming_soon'` for a book announced but not launched yet. */
+  status: 'active' | 'inactive' | 'coming_soon' | (string & {})
+  /** Number of matches (games) the book has odds for right now. Futures markets are not counted. */
+  event_count: number
+  /** ISO 8601 time of the book's last data update; `null` when there is none. */
+  last_update: string | null
+  /** `true` for a book that is announced but not launched yet. */
+  coming_soon: boolean
+  /**
+   * `true` when the book is backed by odds data the API is serving right now.
+   * `false` for a book not launched yet, an `inactive` book, or a selectable
+   * book with no data at the moment (see `idle_reason`). It does not say how
+   * long a book has been without data.
+   */
+  currently_serving: boolean
+  /**
+   * Why a book with no data has none, when known. `'no_demand'`: no customer
+   * has it selected, and selecting it starts it again. `'feed_gap'`: it is
+   * selected but has no data, because it is starting up or its feed is
+   * interrupted. `'paused'`: SharpAPI has temporarily switched it off; not an
+   * outage, no resume date. `null` in every other case; do not read it as a
+   * fault. More values may be added: treat one you do not recognise as `null`.
+   */
+  idle_reason: 'no_demand' | 'feed_gap' | 'paused' | (string & {}) | null
+  /**
+   * How long the book has had no data. An object only on a `'feed_gap'` row,
+   * and only when SharpAPI has evidence of when the data stopped; `null` on
+   * every other row.
+   */
+  outage: SportsbookOutage | null
+  /**
+   * Link to the book's logo, a square PNG; `null` when no logo is available
+   * for the book yet. The API sends it on every row. It is optional here only
+   * so that a hand-built `Sportsbook`, a test mock for example, need not
+   * supply it.
+   */
+  logo?: string | null
+  /** @deprecated The API never sends `name`, so it reads `undefined`. Read `display_name`. */
+  name: string
+  /** @deprecated The API never sends `slug`, so it reads `undefined`. Read `id`. */
+  slug: string
+  /**
+   * @deprecated The API never sends `active`, so it reads `undefined`. Read
+   * `status === 'active'`, or `currently_serving` for whether the book has data
+   * right now.
+   */
+  active: boolean
+  /** @deprecated The API never sends `features`, so it reads `undefined`. It has no replacement. */
+  features: string[]
+}
+
+/** Market info, returned by reference market endpoints. */
+export interface Market {
+  market_type: string
+  market_label?: string
+  selection_count?: number
+  book_count?: number
+  books?: string[]
+  /** Optional integer numerical ID, additive. */
+  numerical_id?: number
+}
+
+/** Team / competitor info, returned by `/teams` reference endpoint.
+ * `abbreviation` is only present for team-sport entities;
+ * individual-sport competitors (tennis players, fighters) skip it.
+ *
+ * Optional metadata fields (`logo`, `city`, `mascot`, `conference`,
+ * `division`) are populated for most major-league teams, but not all.
+ * All additive — older servers omit them and clients see `undefined`. */
+export interface Team {
+  id: string
+  name?: string
+  sport?: string
+  league?: string
+  abbreviation?: string
+  numerical_id?: number
+  logo?: string
+  city?: string
+  mascot?: string
+  conference?: string
+  division?: string
+}
+
+/**
+ * Event lifecycle state.
+ *
+ * - `upcoming` / `live` — what `events.list()` returns unfiltered.
+ * - `final` — a completed event. The `/events` list returns it only under
+ *   the API's `?status=final` query (not a field of `EventsParams`);
+ *   `events.get()` returns it for any completed event.
+ * - `unconfirmed` — returned by `events.get()` only: the live feed dropped
+ *   the game before an end-of-game frame, so its last score is not known to
+ *   be the final one. No list or filter carries it.
+ */
+export type EventStatus = 'upcoming' | 'live' | 'final' | 'unconfirmed'
+
+/**
+ * Last score the live feed showed before it dropped an `unconfirmed` event.
+ * Wire keys are snake_case (the client returns raw JSON without key transforms).
+ */
+export interface EventLastSeen {
+  home_score: number
+  away_score: number
+  /** `"sets"` for set-scored sports (tennis, volleyball, ...), else `"points"`. */
+  score_type?: string
+  game_period?: string
+  game_clock?: string
+  /** ISO 8601 — when the live feed last showed the event. */
+  seen_at: string
+}
+
+/** Event info */
+export interface Event
+  extends Omit<NestedRefs, 'market_ref' | 'sportsbook_ref'> {
+  id: string
+  sport: string
+  league: string
+  homeTeam: string
+  awayTeam: string
+  startTime: string
+  isLive: boolean
+  /**
+   * Season phase. Omitted by the API when unknown (a league without a
+   * calendar, a date outside it, or no start time); absent never means regular
+   * season. Wire key is snake_case `season_type`.
+   */
+  season_type?: SeasonType
+  status: EventStatus
+  /**
+   * Present only on an `unconfirmed` event from `events.get()`, and only for a
+   * key with the Game State add-on. It is not a final result.
+   */
+  last_seen?: EventLastSeen
+}
+
+/** Subscription tier identifier */
+export type SubscriptionTier = 'free' | 'hobby' | 'pro' | 'sharp' | 'enterprise'
+
+/** Single closing-line odd entry returned by `GET /odds/closing`.
+ *
+ * Field names match the wire format (snake_case). `line` only appears on
+ * spread/total markets; `player_name` and `stat_category` only appear on
+ * player-prop markets. */
+export interface ClosingOdd {
+  sportsbook: string
+  market_type: string
+  selection: string
+  selection_type:
+    | 'home'
+    | 'away'
+    | 'over'
+    | 'under'
+    | 'draw'
+    | 'home_draw'
+    | 'away_draw'
+    | 'home_away'
+    | (string & {})
+  /** Raw structured side axis ("home" | "away" | "draw"). Optional + additive. */
+  team_side?: 'home' | 'away' | 'draw' | 'over' | 'under'
+  /** Canonical contest slice ("full_game" | "1st_half" | ...). */
+  market_segment?: string
+  odds_american: number
+  odds_decimal: number
+  /** Spread / total line — present only on point-spread and totals markets. */
+  line?: number
+  /** Player-prop only. */
+  player_name?: string
+  /** Player-prop only. */
+  stat_category?: string
+  /** Structured market ref (optional, additive). */
+  market_ref?: EntityRef
+  /** Structured book ref (optional, additive). */
+  sportsbook_ref?: EntityRef
+}
+
+/** Books-keyed map of closing odds — one entry per sportsbook. */
+export type ClosingBooks = Record<string, ClosingOdd[]>
+
+/** Closing-line snapshot for a single event.
+ *
+ * Returned in the `data` field of `GET /odds/closing?event_id=...`. When
+ * no closing snapshot has been captured yet, `books` is an empty object
+ * and `sport`/`league`/team fields may be absent. */
+export interface ClosingSnapshot {
+  event_id: string
+  sport?: string
+  league?: string
+  home_team?: string
+  away_team?: string
+  event_start_time?: string
+  /** Server-side capture timestamp (ISO 8601). */
+  captured_at?: string
+  books: ClosingBooks
+  /** Optional structured refs (additive, non-breaking). */
+  home?: TeamRef
+  away?: TeamRef
+  sport_ref?: SportRef
+  league_ref?: EntityRef
+}
+
+/** API key record returned by `GET /account/keys` (and the create/rotate
+ * endpoints, which add a one-time-only `key` field on the new key). */
+export interface APIKey {
+  id: string
+  /** Last-8-char-suffix mask of the key id (e.g. `"...FrolK3uD"`). */
+  id_masked: string
+  name: string | null
+  tier: SubscriptionTier | (string & {})
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+/** Response from `POST /account/keys` — includes the plaintext `key`
+ * value, which is shown only once. */
+export interface CreatedAPIKey {
+  id: string
+  /** The full plaintext API key (e.g. `sk_live_xxx`). Only returned on
+   * creation — the server cannot show it again. */
+  key: string
+  name: string | null
+  tier: SubscriptionTier | (string & {})
+}
+
+/** Response from `POST /account/keys/{id}/rotate`. The new key value is
+ * shown only once; the old key may either be revoked immediately or
+ * expire after a grace period. */
+export interface RotatedAPIKey {
+  new_key: CreatedAPIKey
+  old_key: {
+    id: string
+    revoked: boolean
+    expires_at: string | null
+  }
+}
+
+/** Response from `DELETE /account/keys/{id}`. */
+export interface RevokedAPIKey {
+  deleted: boolean
+  key_id: string
+  message: string
+}
+
+/** Account/key info */
+export interface AccountInfo {
+  key: {
+    id: string
+    tier: string
+    userId: string
+  }
+  limits: {
+    requestsPerMinute: number
+    maxStreams: number
+    oddsDelaySeconds: number
+    maxBooks: number
+  }
+  features: {
+    ev: boolean
+    arbitrage: boolean
+    middles: boolean
+    streaming: boolean
+  }
+  addOns: string[]
+}
+
+// =============================================================================
+// Query Parameters
+// =============================================================================
+
+export interface OddsParams {
+  sportsbook?: string | string[]
+  /**
+   * Filter by sport, e.g. `"baseball"`.
+   */
+  sport?: string | string[]
+  league?: string | string[]
+  /**
+   * Filter by event id. Sent on the wire under the API's canonical
+   * `event_id` key — the field keeps the shorter name for compatibility.
+   */
+  event?: string | string[]
+  market?: string
+  live?: boolean
+  main?: boolean
+  /**
+   * Filter by season phase: `"Preseason"` or `"Regular Season"`
+   * (case-insensitive; `regular_season` also works). Rows with an unknown
+   * season type never match.
+   */
+  season_type?: SeasonType | (string & {})
+  limit?: number
+  offset?: number
+}
+
+export interface EventsParams {
+  sport?: string
+  league?: string | string[]
+  live?: boolean
+  /**
+   * Filter by season phase: `"Preseason"` or `"Regular Season"`
+   * (case-insensitive; `regular_season` also works). Rows with an unknown
+   * season type never match.
+   */
+  season_type?: SeasonType | (string & {})
+  date?: string
+  limit?: number
+  offset?: number
+}
+
+export interface ArbitrageParams {
+  sport?: string
+  league?: string
+  min_profit?: number
+  format?: 'json' | 'csv'
+  limit?: number
+}
+
+export interface EVParams {
+  sport?: string
+  league?: string
+  min_ev?: number
+  sportsbook?: string
+  limit?: number
+}
+
+export interface MiddlesParams {
+  sport?: string
+  league?: string
+  sportsbook?: string | string[]
+  market?: string
+  min_size?: number
+  live?: boolean
+  sort?: 'quality' | 'ev' | 'probability' | 'middle_size'
+  limit?: number
+  offset?: number
+}
+
+export interface ClosingParams {
+  /** Restrict the response to a specific sportsbook (or list — CSV on the
+   * wire). When omitted, every book that has a closing snapshot for the
+   * event is returned. */
+  sportsbook?: string | string[]
+}
+
+export interface StreamParams {
+  sportsbook?: string | string[]
+  league?: string | string[]
+  /** Season phase filter for the SSE streams. An unknown value is reported in the stream's `filter_warning` rather than failing the connection. Not taken by WebSocket subscribe. */
+  season_type?: SeasonType | (string & {})
+  eventId?: string
+}
+
+// =============================================================================
+// HTTP Client
+// =============================================================================
+
+/**
+ * SDK version, and the `User-Agent` built from it.
+ *
+ * Node and other server runtimes send `User-Agent: sharpapi-ts/<version>`.
+ * In a browser `User-Agent` is a forbidden header name, so `fetch` drops it.
+ *
+ * Keep in step with the `version` field of package.json.
+ */
+const SDK_VERSION = '0.6.0'
+const SDK_USER_AGENT = `sharpapi-ts/${SDK_VERSION}`
+
+const RETRY_STATUSES = new Set([502, 503, 504])
+const RETRY_MAX_ATTEMPTS = 3
+const RETRY_BASE_DELAY_MS = 500
+const RETRY_MAX_DELAY_MS = 4000
+
+function retryDelay(attempt: number): number {
+  const ceiling = Math.min(
+    RETRY_BASE_DELAY_MS * 2 ** (attempt - 1),
+    RETRY_MAX_DELAY_MS,
+  )
+  return Math.random() * ceiling
+}
+
+class HttpClient {
+  private _apiKey: string
+  private baseUrl: string
+  private timeout: number
+  private authMethod: AuthMethod
+
+  constructor(config: SharpAPIConfig) {
+    this._apiKey = config.apiKey
+    this.baseUrl = config.baseUrl || DEFAULT_CONFIG.baseUrl
+    this.timeout = config.timeout || DEFAULT_CONFIG.timeout
+    this.authMethod = config.authMethod || DEFAULT_CONFIG.authMethod
+  }
+
+  /** Exposed for StreamResource — SSE URL requires the key as a query param. */
+  get apiKey(): string {
+    return this._apiKey
+  }
+
+  private buildUrl(path: string, rawParams?: Record<string, unknown>): string {
+    const url = new URL(path, this.baseUrl)
+    // Every query key the SDK sends passes through here, which is why the
+    // legacy-alias rewrite lives at this one point rather than at each
+    // resource method. See canonicalFilterParams.
+    const params = canonicalFilterParams(rawParams)
+
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          if (Array.isArray(value)) {
+            url.searchParams.set(key, value.join(','))
+          } else {
+            url.searchParams.set(key, String(value))
+          }
+        }
+      })
+    }
+
+    return url.toString()
+  }
+
+  private async request<T>(
+    method: 'GET' | 'POST' | 'DELETE',
+    path: string,
+    body?: unknown,
+    params?: Record<string, unknown>,
+  ): Promise<T> {
+    const url = this.buildUrl(path, params)
+    const authHeaders: Record<string, string> =
+      this.authMethod === 'bearer'
+        ? { Authorization: `Bearer ${this.apiKey}` }
+        : { 'X-API-Key': this.apiKey }
+    const init: RequestInit = {
+      method,
+      // Custom API-key headers and request bodies must never follow redirects.
+      redirect: 'error',
+      headers: {
+        ...authHeaders,
+        'Content-Type': 'application/json',
+        'User-Agent': SDK_USER_AGENT,
+      },
+    }
+    if (body !== undefined) init.body = JSON.stringify(body)
+
+    let lastNetworkError: Error | undefined
+    for (let attempt = 1; attempt <= RETRY_MAX_ATTEMPTS; attempt++) {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout)
+      let response: Response | undefined
+      let networkError: Error | undefined
+
+      try {
+        response = await fetch(url, { ...init, signal: controller.signal })
+      } catch (err) {
+        networkError = err as Error
+        if (networkError.name === 'AbortError') {
+          clearTimeout(timeoutId)
+          const error: Error & { code?: string } = new Error('Request timeout')
+          error.code = 'timeout'
+          throw error
+        }
+      } finally {
+        clearTimeout(timeoutId)
+      }
+
+      const transient =
+        networkError !== undefined ||
+        (response !== undefined && RETRY_STATUSES.has(response.status))
+      if (attempt < RETRY_MAX_ATTEMPTS && transient) {
+        lastNetworkError = networkError
+        await new Promise((resolve) => setTimeout(resolve, retryDelay(attempt)))
+        continue
+      }
+
+      if (networkError) throw networkError
+      if (!response) throw lastNetworkError ?? new Error('No response')
+
+      if (!response.ok) {
+        const errorData = (await response.json().catch(() => ({}))) as APIError
+        const error: Error & { code?: string; status?: number } = new Error(
+          errorData.error?.message || `HTTP ${response.status}`,
+        )
+        error.code = errorData.error?.code || 'unknown_error'
+        error.status = response.status
+        throw error
+      }
+
+      const payload = (await response.json()) as unknown
+
+      // List endpoints can return explicit `"data": null` for empty results.
+      // Returning that value to callers typed as an array caused data.map(...)
+      // to throw a TypeError, including for seasonal filters with no matches.
+      // Normalize this case consistently with the Python SDK.
+      if (
+        payload !== null &&
+        typeof payload === 'object' &&
+        'data' in payload &&
+        (payload as { data: unknown }).data === null
+      ) {
+        ;(payload as { data: unknown }).data = []
+      }
+
+      return payload as T
+    }
+
+    throw lastNetworkError ?? new Error('Max retries exceeded')
+  }
+
+  async get<T>(path: string, params?: Record<string, unknown>): Promise<T> {
+    return this.request<T>('GET', path, undefined, params)
+  }
+
+  async post<T>(
+    path: string,
+    body?: unknown,
+    params?: Record<string, unknown>,
+  ): Promise<T> {
+    return this.request<T>('POST', path, body, params)
+  }
+
+  async delete<T>(path: string, params?: Record<string, unknown>): Promise<T> {
+    return this.request<T>('DELETE', path, undefined, params)
+  }
+
+  getStreamUrl(path: string, params?: Record<string, unknown>): string {
+    const url = this.buildUrl(path, { ...params, api_key: this.apiKey })
+    return url
+  }
+}
+
+// =============================================================================
+// SSE Stream Manager
+// =============================================================================
+
+/**
+ * A row as the SSE stream sends it, under its wire keys (snake_case). The
+ * stream does not convert rows to the camelCase types the REST helpers declare.
+ */
+export interface StreamRow {
+  id: string
+  [field: string]: unknown
+}
+
+/**
+ * An odds row on the SSE stream. In a `snapshot` chunk it is the full row.
+ * In `odds:update` and `odds:locked` it is usually a compact delta: only `id`
+ * and the fields that change (price, `line`, `is_live`, `is_active`,
+ * `timestamp`, and on exchanges `volume`, `volume_24h`, `open_interest`,
+ * `max_bet`). Merge it by `id` into the row the snapshot gave you, and never
+ * read a static field (`sportsbook`, `home_team`, `market_type`, ...) off it.
+ * A row whose `id` you do not hold yet arrives complete; store it as is.
+ */
+export interface StreamOddsRow extends StreamRow {
+  odds_american?: number
+  odds_decimal?: number
+  odds_probability?: number
+  line?: number | null
+  is_live?: boolean
+  /** `false`: the market is suspended and the price is frozen. */
+  is_active?: boolean
+  timestamp?: string
+}
+
+/** `connected`: sent first on every connection. */
+export interface StreamConnected {
+  stream_id: string
+  channel: string
+  filters?: Record<string, unknown>
+  /** `true` on a reconnect that presented a `Last-Event-ID`. */
+  reconnected?: boolean
+  /** `true`: missed odds events are replayed and no snapshot follows. */
+  resumed?: boolean
+  replayed_count?: number
+  fallback_reason?: string
+  [field: string]: unknown
+}
+
+/**
+ * `snapshot`: one chunk of the current data, sent after `connected`. Odds
+ * chunks carry `odds`; opportunity chunks carry their rows under `ev`,
+ * `arbitrage`, `middles` or `low_hold`. More chunks follow while `has_more`.
+ */
+export interface StreamSnapshotChunk {
+  odds?: StreamOddsRow[]
+  ev?: StreamRow[]
+  arbitrage?: StreamRow[]
+  middles?: StreamRow[]
+  low_hold?: StreamRow[]
+  count: number
+  total: number
+  offset: number
+  has_more: boolean
+}
+
+/**
+ * `snapshot:complete`: the snapshot is done and live events follow. On a
+ * reconnect, `mode: 'full_resync'` means the snapshot just received replaces
+ * all local state; `mode: 'resume'` means no snapshot was sent and your state
+ * is continuous.
+ */
+export interface StreamSnapshotComplete {
+  timestamp: string
+  books?: string[]
+  total_odds?: number
+  mode?: 'full_resync' | 'resume'
+  fallback_reason?: string
+  replayed_count?: number
+}
+
+/** `odds:update` and `odds:locked`. */
+export interface StreamOddsUpdate {
+  /** Compact deltas: merge each into your local odds by `id`. */
+  odds: StreamOddsRow[]
+  count: number
+  /** The sportsbook these rows belong to. */
+  book: string
+  /** `true` when more chunks of the same update follow. */
+  partial?: boolean
+  /** `true` on frames re-sent while a reconnect resumes. */
+  replay?: boolean
+}
+
+/** `odds:removed`: odds a sportsbook took down. Delete these ids. */
+export interface StreamOddsRemoved {
+  ids: string[]
+  count: number
+  book: string
+  replay?: boolean
+}
+
+/** `book:status`: a sportsbook stopped (`down`) or resumed (`up`) serving odds. */
+export interface StreamBookStatus {
+  type: 'book:status'
+  book: string
+  state: 'down' | 'up'
+  since: string
+}
+
+/**
+ * `ev:detected`, `arb:detected`, `middles:detected`, `low_hold:detected`:
+ * new or updated opportunities. Upsert each by `id`.
+ */
+export interface StreamOpportunitiesDetected {
+  opportunities: StreamRow[]
+  count: number
+  /** `ev`, `arbitrage`, `middles` or `low_hold`. */
+  type: string
+}
+
+/** `ev:expired`, `arb:expired`, `middles:expired`, `low_hold:expired`. */
+export interface StreamOpportunitiesExpired {
+  /** Ids to remove. */
+  expired: string[]
+  count: number
+  type: string
+}
+
+/**
+ * `gamestate:snapshot`, `gamestate:update` and `gamestate:final`. Each
+ * `gamestate:update` carries the full current live slate: replace local
+ * gamestate with it rather than merging.
+ */
+export interface StreamGameState {
+  data: Array<{ event_id: string; [field: string]: unknown }>
+}
+
+/** `heartbeat`: sent every 30 seconds. */
+export interface StreamHeartbeat {
+  timestamp: string
+  seq?: number
+  global_seq?: string
+  /** Per sportsbook, when it last sent anything (epoch milliseconds). */
+  book_updated_ms?: Record<string, number>
+  [field: string]: unknown
+}
+
+/**
+ * `displaced`: a newer connection on the same API key took the stream slot.
+ * The stream stops and does not reconnect, so the two sessions do not keep
+ * displacing each other.
+ */
+export interface StreamDisplaced {
+  code: string
+  message: string
+  reconnect: boolean
+  hint?: string
+  docs?: string
+}
+
+/**
+ * `error`. A frame the server sends has its `code` and `message`; a dropped
+ * connection has only `message: 'Connection error'`, and the stream then
+ * reconnects.
+ */
+export interface StreamError {
+  code?: string
+  message: string
+}
+
+/** Payload of each SSE event, by the event's name on the wire. */
+export interface StreamEventPayloads {
+  connected: StreamConnected
+  snapshot: StreamSnapshotChunk
+  'snapshot:complete': StreamSnapshotComplete
+  'odds:update': StreamOddsUpdate
+  'odds:locked': StreamOddsUpdate
+  'odds:removed': StreamOddsRemoved
+  'book:status': StreamBookStatus
+  'ev:detected': StreamOpportunitiesDetected
+  'ev:expired': StreamOpportunitiesExpired
+  'arb:detected': StreamOpportunitiesDetected
+  'arb:expired': StreamOpportunitiesExpired
+  'middles:detected': StreamOpportunitiesDetected
+  'middles:expired': StreamOpportunitiesExpired
+  'low_hold:detected': StreamOpportunitiesDetected
+  'low_hold:expired': StreamOpportunitiesExpired
+  'gamestate:snapshot': StreamGameState
+  'gamestate:update': StreamGameState
+  'gamestate:final': StreamGameState
+  /** A filter value the server dropped (for example an unknown `season_type`). */
+  filter_warning: Record<string, unknown>
+  /** Deltas were skipped while the client read too slowly: refetch or reconnect. */
+  resync_required: { reason: string; message: string }
+  displaced: StreamDisplaced
+  heartbeat: StreamHeartbeat
+  error: StreamError
+}
+
+/**
+ * The SSE stream's event names, exactly as the server sends them on the
+ * `event:` line. Before 0.6.0 this was `'initial' | 'update' | 'heartbeat' |
+ * 'error'`; the server never sent `initial` or `update`, so handlers on those
+ * names were never called. Use `snapshot` and `odds:update` instead.
+ */
+export type StreamEventType = keyof StreamEventPayloads
+
+// Every name above, registered on each connection. `error` is handled through
+// `onerror`, which also receives the connection's own error events.
+const STREAM_EVENT_NAMES: readonly Exclude<StreamEventType, 'error'>[] = [
+  'connected',
+  'snapshot',
+  'snapshot:complete',
+  'odds:update',
+  'odds:locked',
+  'odds:removed',
+  'book:status',
+  'ev:detected',
+  'ev:expired',
+  'arb:detected',
+  'arb:expired',
+  'middles:detected',
+  'middles:expired',
+  'low_hold:detected',
+  'low_hold:expired',
+  'gamestate:snapshot',
+  'gamestate:update',
+  'gamestate:final',
+  'filter_warning',
+  'resync_required',
+  'displaced',
+  'heartbeat',
+]
+
+export interface StreamEvent<T = unknown> {
+  type: StreamEventType
+  data: T
+  /** The payload's own `timestamp` when it has one, else the time received. */
+  timestamp: string
+}
+
+export type StreamEventHandler<T> = (event: StreamEvent<T>) => void
+
+/**
+ * An SSE stream. Handlers are typed by event name, so the type parameter is
+ * not used; it is kept so that existing `StreamManager<...>` annotations
+ * still compile.
+ */
+export class StreamManager<_T = unknown> {
+  private url: string
+  private eventSource: EventSource | null = null
+  private handlers: Map<StreamEventType, Set<StreamEventHandler<unknown>>> =
+    new Map()
+  private reconnectAttempts = 0
+  private maxReconnectAttempts = 5
+  private reconnectDelay = 1000
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+
+  constructor(url: string) {
+    this.url = url
+  }
+
+  on<E extends StreamEventType>(
+    event: E,
+    handler: StreamEventHandler<StreamEventPayloads[E]>,
+  ): this {
+    let handlers = this.handlers.get(event)
+    if (!handlers) {
+      handlers = new Set()
+      this.handlers.set(event, handlers)
+    }
+    handlers.add(handler as StreamEventHandler<unknown>)
+    return this
+  }
+
+  off<E extends StreamEventType>(
+    event: E,
+    handler: StreamEventHandler<StreamEventPayloads[E]>,
+  ): this {
+    this.handlers.get(event)?.delete(handler as StreamEventHandler<unknown>)
+    return this
+  }
+
+  private emit(event: StreamEventType, data: unknown): void {
+    const handlers = this.handlers.get(event)
+    if (handlers) {
+      const stamp = (data as { timestamp?: unknown } | null)?.timestamp
+      const streamEvent: StreamEvent<unknown> = {
+        type: event,
+        data,
+        timestamp: typeof stamp === 'string' ? stamp : new Date().toISOString(),
+      }
+      handlers.forEach((handler) => {
+        handler(streamEvent)
+      })
+    }
+  }
+
+  // Parses one named frame and hands it to that name's handlers.
+  private dispatch(name: StreamEventType, raw: string): unknown {
+    let data: unknown
+    try {
+      data = JSON.parse(raw)
+    } catch (err) {
+      console.error(`[SharpAPI] Failed to parse SSE ${name} event:`, err)
+      return undefined
+    }
+    this.emit(name, data)
+    return data
+  }
+
+  connect(): this {
+    if (typeof EventSource === 'undefined') {
+      console.error('[SharpAPI] EventSource not available in this environment')
+      return this
+    }
+
+    if (this.eventSource) {
+      this.disconnect()
+    }
+
+    this.eventSource = new EventSource(this.url)
+
+    this.eventSource.onopen = () => {
+      this.reconnectAttempts = 0
+    }
+
+    // The server names every event, and EventSource hands a named event only
+    // to listeners for that name: `onmessage` never sees them.
+    for (const name of STREAM_EVENT_NAMES) {
+      this.eventSource.addEventListener(name, (event) => {
+        const data = this.dispatch(name, (event as MessageEvent).data)
+        if (
+          name === 'displaced' &&
+          (data as StreamDisplaced)?.reconnect === false
+        ) {
+          // Reconnecting would take the slot back from the newer session,
+          // which would then take it back again.
+          this.disconnect()
+        }
+      })
+    }
+
+    // `onerror` gets both an `event: error` frame from the server (with data;
+    // the connection stays open) and a dropped connection (no data).
+    this.eventSource.onerror = (event) => {
+      const raw = (event as MessageEvent).data
+      if (typeof raw === 'string') {
+        this.dispatch('error', raw)
+        return
+      }
+      this.emit('error', { message: 'Connection error' })
+      this.scheduleReconnect()
+    }
+
+    return this
+  }
+
+  private scheduleReconnect(): void {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.error('[SharpAPI] Max reconnection attempts reached')
+      return
+    }
+
+    const delay = this.reconnectDelay * 2 ** this.reconnectAttempts
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectAttempts++
+      this.connect()
+    }, delay)
+  }
+
+  disconnect(): this {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+
+    if (this.eventSource) {
+      this.eventSource.close()
+      this.eventSource = null
+    }
+
+    return this
+  }
+
+  get connected(): boolean {
+    return this.eventSource?.readyState === 1 // EventSource.OPEN
+  }
+}
+
+// =============================================================================
+// WebSocket Stream Manager
+// =============================================================================
+
+export type WebSocketEventType =
+  | 'connected'
+  | 'subscribed'
+  | 'initial'
+  | 'snapshot_complete'
+  | 'odds_update'
+  | 'odds:locked'
+  | 'ev:detected'
+  | 'ev:expired'
+  | 'arb:detected'
+  | 'arb:expired'
+  | 'middles:detected'
+  | 'middles:expired'
+  | 'heartbeat'
+  | 'pong'
+  | 'reconnecting'
+  | 'error'
+
+export interface WebSocketMessage<T = unknown> {
+  type: WebSocketEventType
+  timestamp?: string
+  data?: T
+  /** Sportsbook filters (on subscribed) */
+  sportsbooks?: string[]
+  /** League filters (on subscribed) */
+  leagues?: string[]
+  /** Source book (on initial/odds_update) */
+  source?: string
+  /** Odds count (on initial/odds_update) */
+  count?: number
+  /** Books included (on snapshot_complete) */
+  books?: string[]
+  /** Error code ({@link WSErrorCode}) or numeric WebSocket close code. Typed
+   * as a widened string to tolerate unknown future codes. */
+  code?: WSErrorCode | (string & {}) | number
+  /** Welcome or error message */
+  message?: string
+  /** Stream ID (on connected) */
+  stream_id?: string
+  /** Subscription tier (on connected) */
+  tier?: string
+  /** Tier features (on connected) */
+  features?: { ev: boolean; arbitrage: boolean; middles: boolean }
+}
+
+export type WebSocketEventHandler<T> = (message: WebSocketMessage<T>) => void
+
+/**
+ * WebSocket close code 1012, "Service Restart" (RFC 6455 7.4.1). SharpAPI
+ * closes with it when a deploy updates the server; the stream emits
+ * `reconnecting` for it, not `error`, and reconnects. Until it is connected
+ * again it keeps retrying, with no attempt limit.
+ */
+const SERVICE_RESTART_CLOSE = 1012
+
+/** The longest wait between two reconnect attempts. */
+const MAX_RECONNECT_DELAY_MS = 30_000
+
+export interface WebSocketFilters {
+  sportsbooks?: string[]
+  leagues?: string[]
+}
+
+/**
+ * WebSocket Stream Manager for real-time odds updates
+ *
+ * Supports bidirectional communication over a persistent WebSocket connection.
+ *
+ * @example
+ * ```typescript
+ * const stream = api.stream.oddsWs({ sportsbook: ['draftkings'] })
+ * stream.on('initial', ({ data }) => setOdds(data))
+ * stream.on('odds_update', ({ data, source }) => updateOdds(source, data))
+ * stream.connect()
+ * ```
+ */
+export class WebSocketStreamManager<T = unknown> {
+  private url: string
+  private ws: WebSocket | null = null
+  private handlers: Map<WebSocketEventType, Set<WebSocketEventHandler<T>>> =
+    new Map()
+  private reconnectAttempts = 0
+  private maxReconnectAttempts = 5
+  private reconnectDelay = 1000
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  // True from a 1012 close until the stream is connected again: while the
+  // server is updating, failed attempts are expected and don't count.
+  private serverUpdating = false
+  private filters: WebSocketFilters | null = null
+  private pingInterval: ReturnType<typeof setInterval> | null = null
+
+  constructor(url: string, filters?: WebSocketFilters) {
+    this.url = url
+    this.filters = filters || null
+  }
+
+  /**
+   * Register a handler for a specific event type
+   */
+  on(event: WebSocketEventType, handler: WebSocketEventHandler<T>): this {
+    let handlers = this.handlers.get(event)
+    if (!handlers) {
+      handlers = new Set()
+      this.handlers.set(event, handlers)
+    }
+    handlers.add(handler)
+    return this
+  }
+
+  /**
+   * Remove a handler for a specific event type
+   */
+  off(event: WebSocketEventType, handler: WebSocketEventHandler<T>): this {
+    this.handlers.get(event)?.delete(handler)
+    return this
+  }
+
+  private emit(message: WebSocketMessage<T>): void {
+    const eventType = message.type as WebSocketEventType
+    const handlers = this.handlers.get(eventType)
+    if (handlers) {
+      handlers.forEach((handler) => {
+        handler(message)
+      })
+    }
+  }
+
+  /**
+   * Connect to the WebSocket server
+   */
+  connect(): this {
+    if (typeof WebSocket === 'undefined') {
+      console.error('[SharpAPI] WebSocket not available in this environment')
+      return this
+    }
+
+    if (this.ws) {
+      this.teardown()
+    }
+
+    this.ws = new WebSocket(this.url)
+
+    this.ws.onopen = () => {
+      this.reconnectAttempts = 0
+      this.serverUpdating = false
+
+      // Send subscribe message with filters
+      const subscribeMsg: { type: string; filters?: WebSocketFilters } = {
+        type: 'subscribe',
+      }
+      if (this.filters) {
+        subscribeMsg.filters = this.filters
+      }
+      this.send(subscribeMsg)
+
+      // Start ping interval to keep connection alive
+      this.pingInterval = setInterval(() => {
+        this.send({ type: 'ping' })
+      }, 25000) // Ping every 25s (server timeout is 30s)
+    }
+
+    this.ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data) as WebSocketMessage<T>
+        this.emit(message)
+      } catch (err) {
+        console.error('[SharpAPI] Failed to parse WebSocket message:', err)
+      }
+    }
+
+    this.ws.onclose = (event) => {
+      this.cleanup()
+
+      if (event.code === 1000) return // Normal close
+
+      // Don't reconnect on permanent failures (auth, access, rate limit)
+      const NON_RETRIABLE = [4001, 4003, 4029]
+
+      if (event.code === SERVICE_RESTART_CLOSE) {
+        // The server is being updated (a deploy). This is routine, not a
+        // failure: say so with `reconnecting` and reconnect, without an
+        // `error` that would land in the caller's error handling and logs.
+        this.serverUpdating = true
+        this.emit({
+          type: 'reconnecting',
+          code: event.code,
+          message: event.reason || 'Server updating',
+        })
+        this.scheduleReconnect()
+        return
+      }
+
+      if (this.serverUpdating && !NON_RETRIABLE.includes(event.code)) {
+        // An attempt made while the server is still updating was refused.
+        // Expected: keep saying `reconnecting` and keep trying.
+        this.emit({
+          type: 'reconnecting',
+          code: event.code,
+          message: 'Server updating',
+        })
+        this.scheduleReconnect()
+        return
+      }
+      this.serverUpdating = false
+
+      // Emit error with server-provided reason if available
+      this.emit({
+        type: 'error',
+        code: event.code >= 4000 ? `ws_${event.code}` : 'disconnected',
+        message: event.reason || 'Connection closed',
+      })
+
+      if (!NON_RETRIABLE.includes(event.code)) {
+        this.scheduleReconnect()
+      }
+    }
+
+    this.ws.onerror = () => {
+      // A refused attempt while the server is updating is reported by onclose
+      // as `reconnecting`; don't also raise an error for it.
+      if (this.serverUpdating) return
+      this.emit({
+        type: 'error',
+        code: 'connection_error',
+        message: 'WebSocket error',
+      })
+    }
+
+    return this
+  }
+
+  private cleanup(): void {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval)
+      this.pingInterval = null
+    }
+  }
+
+  private scheduleReconnect(): void {
+    if (
+      !this.serverUpdating &&
+      this.reconnectAttempts >= this.maxReconnectAttempts
+    ) {
+      console.error('[SharpAPI] Max WebSocket reconnection attempts reached')
+      this.emit({
+        type: 'error',
+        code: 'max_retries',
+        message: 'Max reconnection attempts reached',
+      })
+      return
+    }
+
+    const delay = Math.min(
+      this.reconnectDelay * 2 ** this.reconnectAttempts,
+      MAX_RECONNECT_DELAY_MS,
+    )
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectAttempts++
+      this.connect()
+    }, delay)
+  }
+
+  /**
+   * Send a message to the server
+   */
+  send(message: object): void {
+    if (this.ws && this.ws.readyState === 1) {
+      // WebSocket.OPEN
+      this.ws.send(JSON.stringify(message))
+    }
+  }
+
+  /**
+   * Update subscription filters
+   */
+  updateFilters(filters: WebSocketFilters): void {
+    this.filters = filters
+    if (this.connected) {
+      this.send({ type: 'subscribe', filters })
+    }
+  }
+
+  /**
+   * Disconnect from the WebSocket server
+   */
+  disconnect(): this {
+    this.teardown()
+    this.serverUpdating = false
+    return this
+  }
+
+  // Close the socket and stop the timers, but keep the reconnect state:
+  // connect() uses this to replace the socket during a retry.
+  private teardown(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+
+    this.cleanup()
+
+    if (this.ws) {
+      this.ws.close(1000) // Normal closure
+      this.ws = null
+    }
+  }
+
+  /**
+   * Check if connected
+   */
+  get connected(): boolean {
+    return this.ws?.readyState === 1 // WebSocket.OPEN
+  }
+}
+
+// =============================================================================
+// API Resource Classes
+// =============================================================================
+
+class SportsResource {
+  constructor(private http: HttpClient) {}
+
+  /** List all sports */
+  async list(): Promise<APIResponse<Sport[]>> {
+    return this.http.get('/api/v1/sports')
+  }
+
+  /** Get a specific sport */
+  async get(sportId: string): Promise<APIResponse<Sport>> {
+    return this.http.get(`/api/v1/sports/${sportId}`)
+  }
+}
+
+class LeaguesResource {
+  constructor(private http: HttpClient) {}
+
+  /** List all leagues */
+  async list(params?: { sport?: string }): Promise<APIResponse<League[]>> {
+    return this.http.get('/api/v1/leagues', params)
+  }
+
+  /** Get a specific league */
+  async get(leagueId: string): Promise<APIResponse<League>> {
+    return this.http.get(`/api/v1/leagues/${leagueId}`)
+  }
+}
+
+class SportsbooksResource {
+  constructor(private http: HttpClient) {}
+
+  /** List all sportsbooks */
+  async list(): Promise<APIResponse<Sportsbook[]>> {
+    return this.http.get('/api/v1/sportsbooks')
+  }
+
+  /** Get a specific sportsbook */
+  async get(bookId: string): Promise<APIResponse<Sportsbook>> {
+    return this.http.get(`/api/v1/sportsbooks/${bookId}`)
+  }
+}
+
+class EventsResource {
+  constructor(private http: HttpClient) {}
+
+  /** List events */
+  async list(params?: EventsParams): Promise<APIResponse<Event[]>> {
+    return this.http.get('/api/v1/events', params as Record<string, unknown>)
+  }
+
+  /** Get a specific event */
+  async get(eventId: string): Promise<APIResponse<Event>> {
+    return this.http.get(`/api/v1/events/${eventId}`)
+  }
+
+  /** Get markets for an event */
+  async markets(eventId: string): Promise<APIResponse<string[]>> {
+    return this.http.get(`/api/v1/events/${eventId}/markets`)
+  }
+}
+
+/**
+ * Legacy filter spellings the API still accepts, and the canonical name each
+ * one maps to.
+ *
+ * The server answers an alias request with `Deprecation: true` and a
+ * `Warning: 299` header, and the aliases may be removed in a future API
+ * version, so this SDK sends the canonical names.
+ *
+ * `buildUrl` copies the params object straight into the query string, so the
+ * field name on `OddsParams` / `EventsParams` / `MiddlesParams` *is* the wire
+ * key; without this map every SDK caller would send the deprecated spelling.
+ *
+ * The public field names do not change. `event` stays `event`, `live` stays
+ * `live`: renaming them would break every existing caller, for no gain the
+ * wire key does not already deliver.
+ */
+const LEGACY_FILTER_ALIASES: Readonly<Record<string, string>> = {
+  event: 'event_id',
+  live: 'is_live',
+}
+
+/**
+ * Rewrite any legacy filter spelling in a params object to its canonical name.
+ *
+ * Applied inside `buildUrl`, which is the single point every query key passes
+ * through — so a resource method added later is covered without touching it,
+ * and no call site can be missed.
+ *
+ * An explicitly supplied canonical key WINS over the alias, matching the
+ * server's own canonical-over-alias precedence. Passing both is the one case
+ * where this changes an observable outcome, and it resolves the same way the
+ * server would have.
+ */
+function canonicalFilterParams(
+  params?: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  if (!params) return params
+  let rewritten: Record<string, unknown> | undefined
+  for (const [alias, canonical] of Object.entries(LEGACY_FILTER_ALIASES)) {
+    if (!(alias in params)) continue
+    // Copy lazily: an object with no alias in it is returned untouched, so the
+    // common path allocates nothing.
+    rewritten ??= { ...params }
+    // `undefined` is dropped by buildUrl, so an explicitly-undefined alias
+    // must not resurrect as an explicitly-undefined canonical key — it is
+    // simply removed, exactly as buildUrl would have ignored it.
+    const value = rewritten[alias]
+    delete rewritten[alias]
+    if (value !== undefined && !(canonical in params)) {
+      rewritten[canonical] = value
+    }
+  }
+  return rewritten ?? params
+}
+
+class OddsResource {
+  constructor(private http: HttpClient) {}
+
+  /**
+   * Get odds snapshot.
+   *
+   * Results are ordered by event_start_time ascending, so page 1 is the
+   * earliest-starting events, not a sample of all books. A book whose events
+   * start later in the day is legitimately absent from page 1 and appears on a
+   * later page. Filter by sportsbook, league, or event_id to get coverage
+   * instead of a time window.
+   */
+  async get(params?: OddsParams): Promise<APIResponse<NormalizedOdds[]>> {
+    return this.http.get(
+      '/api/v1/odds',
+      params as Record<string, unknown> | undefined,
+    )
+  }
+
+  /** Get best odds across books */
+  async best(params?: OddsParams): Promise<APIResponse<NormalizedOdds[]>> {
+    return this.http.get(
+      '/api/v1/odds/best',
+      params as Record<string, unknown> | undefined,
+    )
+  }
+
+  /** Get odds comparison */
+  async comparison(
+    params?: OddsParams,
+  ): Promise<APIResponse<Record<string, NormalizedOdds[]>>> {
+    return this.http.get(
+      '/api/v1/odds/comparison',
+      params as Record<string, unknown> | undefined,
+    )
+  }
+
+  /**
+   * Batch get odds for multiple events. Rows are grouped by event:
+   * `res.data.events[i].odds` holds the rows, and `res.data.missing_events`
+   * lists requested ids that were not found.
+   */
+  async batch(
+    eventIds: string[],
+    filters?: OddsBatchFilters,
+  ): Promise<OddsBatchResponse> {
+    return this.http.post('/api/v1/odds/batch', {
+      event_ids: eventIds,
+      ...filters,
+    })
+  }
+
+  /**
+   * Get the closing-line snapshot for a single event.
+   *
+   * Returns the per-book odds captured at event kickoff (the moment the
+   * sharp market locked). Used for line-shopping post-mortems and CLV
+   * (closing-line value) calculations.
+   *
+   * When no closing snapshot has been captured yet, `data.books` is an
+   * empty object.
+   *
+   * @param eventId — canonical event id (e.g. `"evt_..."`).
+   * @param options — optional `sportsbook` filter (CSV on the wire).
+   *
+   * @example
+   * ```typescript
+   * const { data } = await api.odds.closing('evt_123')
+   * for (const [book, odds] of Object.entries(data.books)) {
+   *   console.log(book, odds.length, 'markets')
+   * }
+   * ```
+   */
+  async closing(
+    eventId: string,
+    options?: ClosingParams,
+  ): Promise<APIResponse<ClosingSnapshot>> {
+    return this.http.get('/api/v1/odds/closing', {
+      event_id: eventId,
+      ...(options ?? {}),
+    } as Record<string, unknown>)
+  }
+}
+
+class ArbitrageResource {
+  constructor(private http: HttpClient) {}
+
+  /** Get arbitrage opportunities */
+  async get(
+    params?: ArbitrageParams,
+  ): Promise<APIResponse<ArbitrageOpportunity[]>> {
+    return this.http.get(
+      '/api/v1/opportunities/arbitrage',
+      params as Record<string, unknown>,
+    )
+  }
+
+  /** Get arbitrage as CSV */
+  async csv(params?: Omit<ArbitrageParams, 'format'>): Promise<string> {
+    const url = new URL(
+      '/api/v1/opportunities/arbitrage',
+      'https://api.sharpapi.io',
+    )
+    url.searchParams.set('format', 'csv')
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined) url.searchParams.set(k, String(v))
+      })
+    }
+    const response = await fetch(url.toString())
+    return response.text()
+  }
+}
+
+class EVResource {
+  constructor(private http: HttpClient) {}
+
+  /** Get +EV opportunities */
+  async get(params?: EVParams): Promise<APIResponse<EVOpportunity[]>> {
+    return this.http.get(
+      '/api/v1/opportunities/ev',
+      params as Record<string, unknown>,
+    )
+  }
+}
+
+class MiddlesResource {
+  constructor(private http: HttpClient) {}
+
+  /** Get middle opportunities */
+  async get(params?: MiddlesParams): Promise<APIResponse<MiddleOpportunity[]>> {
+    return this.http.get(
+      '/api/v1/opportunities/middles',
+      params as Record<string, unknown>,
+    )
+  }
+}
+
+/**
+ * Live game state — scores, period, clock — merged across sportsbooks.
+ *
+ * Requires the Game State add-on or Enterprise tier.
+ *
+ * Pair with EV / arbitrage / low-hold rows: those endpoints no longer
+ * carry `game_state` themselves — look up the row's `event_id` here.
+ *
+ * @example
+ * ```typescript
+ * const arbs = await api.arbitrage.get({ live: true })
+ * const { data: state } = await api.gamestate.get()
+ * for (const arb of arbs.data) {
+ *   const gs = state[arb.sport]?.[arb.eventId]
+ *   console.log(arb.eventName, gs?.game_period, gs?.game_clock)
+ * }
+ * ```
+ */
+class GameStateResource {
+  constructor(private http: HttpClient) {}
+
+  /**
+   * Fetch the current game state.
+   *
+   * @param sport — limit to a single sport (e.g. `"basketball"`).
+   *   Omit to fetch every sport in one call.
+   *
+   * Response `data` is `{ sport: { event_id: GameState } }`. When `sport`
+   * is provided, the outer map contains only that one key.
+   */
+  async get(sport?: string): Promise<APIResponse<GameStateMap>> {
+    const path = sport
+      ? `/api/v1/gamestate/${encodeURIComponent(sport)}`
+      : '/api/v1/gamestate'
+    return this.http.get(path)
+  }
+}
+
+class AccountResource {
+  constructor(private http: HttpClient) {}
+
+  /** Get account info */
+  async me(): Promise<APIResponse<AccountInfo>> {
+    return this.http.get('/api/v1/account')
+  }
+
+  /** Get usage stats */
+  async usage(): Promise<APIResponse<{ requests: number; streams: number }>> {
+    return this.http.get('/api/v1/account/usage')
+  }
+}
+
+/** CRUD for the caller's API keys, backed by `/api/v1/account/keys`.
+ *
+ * Returned key records use snake_case field names to match the wire
+ * format ({@link APIKey}). The plaintext key value is only ever returned
+ * by {@link KeysResource.create} and {@link KeysResource.rotate} — the
+ * server cannot show it again. */
+class KeysResource {
+  constructor(private http: HttpClient) {}
+
+  /** List every API key on the caller's account. */
+  async list(): Promise<
+    APIResponse<APIKey[]> & { meta?: { count?: number; max_keys?: number } }
+  > {
+    return this.http.get('/api/v1/account/keys')
+  }
+
+  /** Create a new API key. The plaintext `key` value in the response is
+   * shown only once — the caller must store it securely. */
+  async create(name: string): Promise<APIResponse<CreatedAPIKey>> {
+    return this.http.post('/api/v1/account/keys', { name })
+  }
+
+  /** Revoke an API key by id. The caller cannot revoke the key they are
+   * currently authenticating with. */
+  async revoke(keyId: string): Promise<APIResponse<RevokedAPIKey>> {
+    return this.http.delete(`/api/v1/account/keys/${encodeURIComponent(keyId)}`)
+  }
+
+  /** Rotate an API key — atomically issues a replacement and revokes the
+   * original. The new plaintext `key` is shown only once. */
+  async rotate(keyId: string): Promise<APIResponse<RotatedAPIKey>> {
+    return this.http.post(
+      `/api/v1/account/keys/${encodeURIComponent(keyId)}/rotate`,
+    )
+  }
+}
+
+class StreamResource {
+  private apiKey: string
+
+  constructor(private http: HttpClient) {
+    this.apiKey = http.apiKey
+  }
+
+  // The server reads the channel from `channel` and the event filter from
+  // `event_id`. It ignores `type` and `eventId`, so a stream sent with those
+  // got the default `opportunities` channel, unfiltered.
+  private sseUrl(channel: string, params?: StreamParams): string {
+    const { eventId, ...filters } = params ?? {}
+    return this.http.getStreamUrl('/api/v1/stream', {
+      ...filters,
+      channel,
+      event_id: eventId,
+    } as Record<string, unknown>)
+  }
+
+  /**
+   * Create odds stream (SSE): `snapshot` chunks, `snapshot:complete`, then
+   * `odds:update` (compact deltas, merge by `id`), `odds:locked`,
+   * `odds:removed`, `book:status` and `heartbeat`.
+   */
+  odds(params?: StreamParams): StreamManager {
+    return new StreamManager(this.sseUrl('odds', params))
+  }
+
+  /**
+   * Create opportunities stream (SSE): `snapshot` chunks, then
+   * `ev:`/`arb:`/`middles:`/`low_hold:` `detected` and `expired` events.
+   */
+  opportunities(params?: StreamParams): StreamManager {
+    return new StreamManager(this.sseUrl('opportunities', params))
+  }
+
+  /** Create unified stream (odds + opportunities) - SSE */
+  all(params?: StreamParams): StreamManager {
+    return new StreamManager(this.sseUrl('all', params))
+  }
+
+  /** Create single event stream (SSE): the odds stream for one event. */
+  event(eventId: string, params?: StreamParams): StreamManager {
+    return new StreamManager(this.sseUrl('odds', { ...params, eventId }))
+  }
+
+  /**
+   * Stream live game state updates — scores, period, clock — merged
+   * across sportsbooks (SSE).
+   *
+   * Emits `gamestate:snapshot` on connect, then `gamestate:update` (the
+   * full current slate each time: replace, don't merge) and
+   * `gamestate:final` when an event finishes. Requires the Game State
+   * add-on or Enterprise tier.
+   */
+  gamestate(): StreamManager {
+    const url = this.http.getStreamUrl('/api/v1/stream/gamestate', {})
+    return new StreamManager(url)
+  }
+
+  /**
+   * Create a bidirectional WebSocket odds stream
+   *
+   * Connects to wss://ws.sharpapi.io for real-time updates.
+   *
+   * @example
+   * ```typescript
+   * const stream = api.stream.oddsWs({ sportsbook: ['draftkings', 'fanduel'] })
+   * stream.on('connected', ({ message, tier }) => console.log(message, tier))
+   * stream.on('initial', ({ data }) => setAllOdds(data))
+   * stream.on('odds_update', ({ data, source }) => updateBook(source, data))
+   * stream.on('ev:detected', ({ data }) => notifyEV(data))
+   * stream.on('heartbeat', () => console.log('alive'))
+   * stream.on('reconnecting', ({ message }) => console.info(message)) // server update
+   * stream.on('error', ({ message }) => console.error(message))
+   * stream.connect()
+   * ```
+   */
+  oddsWs(params?: StreamParams): WebSocketStreamManager<NormalizedOdds[]> {
+    // Build WebSocket URL with API key
+    const wsUrl = new URL('wss://ws.sharpapi.io')
+    wsUrl.searchParams.set('api_key', this.apiKey)
+
+    // Convert params to WebSocket filters
+    const filters: WebSocketFilters = {}
+    if (params?.sportsbook) {
+      filters.sportsbooks = Array.isArray(params.sportsbook)
+        ? params.sportsbook
+        : [params.sportsbook]
+    }
+    if (params?.league) {
+      filters.leagues = Array.isArray(params.league)
+        ? params.league
+        : [params.league]
+    }
+
+    return new WebSocketStreamManager(
+      wsUrl.toString(),
+      Object.keys(filters).length > 0 ? filters : undefined,
+    )
+  }
+}
+
+// =============================================================================
+// Main Client Class
+// =============================================================================
+
+/**
+ * SharpAPI Client
+ *
+ * @example
+ * ```typescript
+ * const api = new SharpAPI('sk_xxx')
+ *
+ * // Get odds
+ * const { data } = await api.odds.get({ league: 'NBA' })
+ *
+ * // Get arbitrage opportunities
+ * const { data: arbs } = await api.arbitrage.get({ min_profit: 1 })
+ *
+ * // Stream odds (requires WebSocket add-on)
+ * const stream = api.stream.odds({ league: 'NBA' })
+ * stream.on('odds:update', ({ data }) => console.log(data.book, data.odds))
+ * stream.connect()
+ * ```
+ */
+export class SharpAPI {
+  private http: HttpClient
+
+  /** Sports endpoints */
+  readonly sports: SportsResource
+  /** Leagues endpoints */
+  readonly leagues: LeaguesResource
+  /** Sportsbooks endpoints */
+  readonly sportsbooks: SportsbooksResource
+  /** Events endpoints */
+  readonly events: EventsResource
+  /** Odds endpoints */
+  readonly odds: OddsResource
+  /** Arbitrage endpoints (Hobby+ tier) */
+  readonly arbitrage: ArbitrageResource
+  /** +EV endpoints (Pro+ tier) */
+  readonly ev: EVResource
+  /** Middles endpoints (Pro+ tier) */
+  readonly middles: MiddlesResource
+  /** Game State endpoints — live scores/period/clock (Game State add-on or Enterprise) */
+  readonly gamestate: GameStateResource
+  /** Account endpoints */
+  readonly account: AccountResource
+  /** API key management — `/api/v1/account/keys` CRUD. */
+  readonly keys: KeysResource
+  /** Streaming endpoints (requires WebSocket add-on) */
+  readonly stream: StreamResource
+
+  constructor(apiKey: string, options?: Omit<SharpAPIConfig, 'apiKey'>) {
+    this.http = new HttpClient({ apiKey, ...options })
+
+    this.sports = new SportsResource(this.http)
+    this.leagues = new LeaguesResource(this.http)
+    this.sportsbooks = new SportsbooksResource(this.http)
+    this.events = new EventsResource(this.http)
+    this.odds = new OddsResource(this.http)
+    this.arbitrage = new ArbitrageResource(this.http)
+    this.ev = new EVResource(this.http)
+    this.middles = new MiddlesResource(this.http)
+    this.gamestate = new GameStateResource(this.http)
+    this.account = new AccountResource(this.http)
+    this.keys = new KeysResource(this.http)
+    this.stream = new StreamResource(this.http)
+  }
+}
+
+// =============================================================================
+// Default Export & Convenience Functions
+// =============================================================================
+
+export default SharpAPI
+
+/** Create a new SharpAPI client */
+export function createClient(
+  apiKey: string,
+  options?: Omit<SharpAPIConfig, 'apiKey'>,
+): SharpAPI {
+  return new SharpAPI(apiKey, options)
+}

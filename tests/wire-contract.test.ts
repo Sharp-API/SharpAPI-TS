@@ -1,0 +1,330 @@
+// Model <-> wire contract for the TypeScript SDK.
+//
+// TypeScript types are erased at runtime, so a wrong interface does not throw —
+// it silently hands back `undefined`. Some declared fields do not exist on the
+// wire, mostly because of casing: the interfaces are camelCase, the wire is
+// snake_case, and `request()` returns the parsed body by raw cast with no key
+// transform. The tests below track the remaining interface mismatches.
+//
+// Correcting those names is a breaking change to a published package and is
+// outside this regression suite's scope. It covers:
+//
+//   1. the empty-list runtime bug — `"data": null` on an empty list
+//   2. a regression check that prevents the known interface mismatch set from growing
+//
+// Fixtures are real responses captured from the deployed API. Refresh them when
+// the wire changes on purpose; a failure here means the wire moved.
+
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { SharpAPI, type SportsbookOutage } from '../src/index'
+
+const HERE = dirname(fileURLToPath(import.meta.url))
+const fixture = (name: string) =>
+  JSON.parse(readFileSync(join(HERE, 'fixtures', name), 'utf8'))
+
+const respondWith = (body: unknown) =>
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    ),
+  )
+
+afterEach(() => vi.unstubAllGlobals())
+
+// --------------------------------------------------------------------------- //
+// 1. The runtime bug: an empty list arrives as `"data": null`, not `[]`
+// --------------------------------------------------------------------------- //
+
+describe('empty list results', () => {
+  it('the fixture really does carry a null data, or the test below is vacuous', () => {
+    expect(fixture('events-empty.json').data).toBeNull()
+  })
+
+  it('normalises `"data": null` to an empty array', async () => {
+    respondWith(fixture('events-empty.json'))
+    const client = new SharpAPI('sk_test')
+    const res = await client.events.list({ league: 'nba', live: true })
+    expect(Array.isArray(res.data)).toBe(true)
+    expect(res.data).toEqual([])
+  })
+
+  it('the returned value is safe to iterate — this threw TypeError before', async () => {
+    respondWith(fixture('events-empty.json'))
+    const client = new SharpAPI('sk_test')
+    const res = await client.events.list({ league: 'nba', live: true })
+    expect(() => res.data.map((e) => e.id)).not.toThrow()
+  })
+
+  // Control: a populated response must pass through untouched, so the fix
+  // cannot be satisfied by blanket-replacing `data`.
+  it('leaves a populated data array alone', async () => {
+    respondWith(fixture('odds.json'))
+    const client = new SharpAPI('sk_test')
+    const res = await client.odds.get({ sport: 'baseball', limit: 1 })
+    expect(res.data).toHaveLength(1)
+    expect(res.data[0]).toEqual(fixture('odds.json').data[0])
+  })
+
+  // Control: an object-shaped `data` must not be turned into an array.
+  it('leaves an object-shaped data alone', async () => {
+    respondWith({ data: { tier: 'pro', features: ['odds'] } })
+    const client = new SharpAPI('sk_test')
+    const res = (await client.account.me()) as unknown as { data: { tier: string } }
+    expect(Array.isArray(res.data)).toBe(false)
+    expect(res.data.tier).toBe('pro')
+  })
+})
+
+// --------------------------------------------------------------------------- //
+// 2. The drift ratchet
+// --------------------------------------------------------------------------- //
+
+const SOURCE = readFileSync(join(HERE, '..', 'src', 'index.ts'), 'utf8')
+
+/** Field names declared on an interface, comments stripped. */
+function declaredFields(name: string): string[] {
+  // `\b` matters: without it `Sport` also matches `SportRef` and the wrong
+  // interface is measured.
+  const m = new RegExp(`export interface ${name}\\b[^{]*\\{([\\s\\S]*?)\\n\\}`).exec(SOURCE)
+  if (!m) throw new Error(`interface ${name} not found`)
+  const body = m[1].replace(/\/\*\*[\s\S]*?\*\//g, '').replace(/\/\/.*/g, '')
+  return body
+    .split('\n')
+    .map((line) => /^\s*([A-Za-z_]\w*)\??\s*:/.exec(line)?.[1])
+    .filter((f): f is string => Boolean(f))
+}
+
+const wireKeys = (name: string): Set<string> => {
+  const d = fixture(name).data
+  return new Set(Object.keys(Array.isArray(d) ? d[0] : d))
+}
+
+// Pinned 2026-08-23. Each entry is a field the SDK declares that the deployed
+// API does not send — reading it yields `undefined`, with no error. This is a
+// regression baseline: adding a mismatch or correcting a field fails this check.
+// Remove corrected entries so the baseline shrinks as interfaces are fixed.
+const KNOWN_DRIFT: Record<string, { fixture: string; missing: string[] }> = {
+  NormalizedOdds: {
+    fixture: 'odds.json',
+    missing: [
+      'eventId', 'homeTeam', 'awayTeam', 'marketType', 'selectionType',
+      'team_side', 'market_segment', 'season_type', 'odds', 'eventStartTime', 'isLive', 'status',
+      // Optional, exchange rows only: the captured Pinnacle fixture has none. That they
+      // arrive under these names is the 'exchange last trade print' block below.
+      'last_trade_american', 'last_trade_decimal', 'last_trade_probability', 'last_trade_at',
+    ],
+  },
+  Sport: { fixture: 'sports.json', missing: ['slug', 'active', 'eventCount'] },
+  League: {
+    fixture: 'leagues.json',
+    missing: ['name', 'slug', 'sportId', 'country', 'active'],
+  },
+  Sportsbook: {
+    fixture: 'sportsbooks.json',
+    // Deprecated: never sent. Kept so code that reads them still compiles.
+    missing: ['name', 'slug', 'active', 'features'],
+  },
+  EVOpportunity: {
+    fixture: 'ev.json',
+    missing: [
+      'eventId', 'eventName', 'marketType', 'odds', 'sharpOdds', 'sharpBook',
+      'fairProbability', 'evPercentage', 'kellyPercent', 'market_segment',
+      'is_suspended', 'suspended_since', 'detectedAt',
+    ],
+  },
+  ArbitrageOpportunity: {
+    fixture: 'arbitrage.json',
+    missing: [
+      'eventId', 'eventName', 'marketType', 'profitPercent', 'impliedTotal', 'detectedAt',
+    ],
+  },
+  // Row 0 of the fixture is a team-total row, so team_side is on the wire too.
+  LowHoldOpportunity: { fixture: 'low-hold.json', missing: [] },
+}
+
+describe('declared fields vs the wire', () => {
+  it('the extractor works — a known interface yields known fields', () => {
+    expect(declaredFields('Sport')).toContain('id')
+    expect(declaredFields('Sport')).toContain('slug')
+    // The \b guard: Sport must not be measured as SportRef.
+    expect(declaredFields('Sport')).not.toEqual(declaredFields('SportRef'))
+  })
+
+  it.each(Object.entries(KNOWN_DRIFT))(
+    '%s drift matches the pin exactly',
+    (iface, { fixture: fx, missing }) => {
+      const wire = wireKeys(fx)
+      const actual = declaredFields(iface).filter((f) => !wire.has(f)).sort()
+      expect(actual).toEqual([...missing].sort())
+    },
+  )
+
+  it('the drift totals match the baseline — update this when the retype lands', () => {
+    const total = Object.keys(KNOWN_DRIFT).reduce(
+      (n, i) => n + declaredFields(i).length,
+      0,
+    )
+    const drifted = Object.values(KNOWN_DRIFT).reduce((n, d) => n + d.missing.length, 0)
+    expect({ drifted, total }).toEqual({ drifted: 47, total: 101 })
+  })
+})
+
+// --------------------------------------------------------------------------- //
+// 3. Exchange last trade print
+// --------------------------------------------------------------------------- //
+
+// The four keys exactly as the API serializes them for a Smarkets trade at
+// 12.2% (the server's own serialization test uses these values). The captured
+// fixture carries none of them, so the row is a captured row plus the print.
+const LAST_TRADE_PRINT = {
+  last_trade_american: 720,
+  last_trade_decimal: 8.2,
+  last_trade_probability: 0.122,
+  last_trade_at: '2026-11-15T18:42:07Z',
+}
+
+describe('exchange last trade print on odds rows', () => {
+  it('the captured fixture carries no print, or the absent case below is vacuous', () => {
+    const rows = fixture('odds.json').data as Record<string, unknown>[]
+    expect(rows.length).toBeGreaterThan(0)
+    expect(rows.flatMap((r) => Object.keys(r)).filter((k) => k.startsWith('last_trade'))).toEqual([])
+  })
+
+  it('hands the four fields through under their wire names, typed', async () => {
+    const body = fixture('odds.json')
+    body.data = [{ ...body.data[0], sportsbook: 'smarkets', ...LAST_TRADE_PRINT }]
+    respondWith(body)
+    const res = await new SharpAPI('sk_test').odds.get({})
+    const row = res.data[0]
+    // Typed reads: these lines stop compiling if a field leaves NormalizedOdds.
+    const american: number | undefined = row.last_trade_american
+    const decimal: number | undefined = row.last_trade_decimal
+    const probability: number | undefined = row.last_trade_probability
+    const at: string | undefined = row.last_trade_at
+    expect({ american, decimal, probability, at }).toEqual({
+      american: 720,
+      decimal: 8.2,
+      probability: 0.122,
+      at: '2026-11-15T18:42:07Z',
+    })
+  })
+
+  it('a row without a print reads undefined for all four', async () => {
+    respondWith(fixture('odds.json'))
+    const res = await new SharpAPI('sk_test').odds.get({})
+    const row = res.data[0]
+    expect([
+      row.last_trade_american,
+      row.last_trade_decimal,
+      row.last_trade_probability,
+      row.last_trade_at,
+    ]).toEqual([undefined, undefined, undefined, undefined])
+  })
+})
+
+// --------------------------------------------------------------------------- //
+// 4. Sportsbook rows
+// --------------------------------------------------------------------------- //
+
+// No book had a feed gap when the fixture was captured, so this row is the
+// captured draftkings_predictions row with the gap it reported in an earlier
+// capture (2026-11-21): these keys, with these values.
+const FEED_GAP = {
+  event_count: 0,
+  last_update: null,
+  has_limits: null,
+  currently_serving: false,
+  idle_reason: 'feed_gap',
+  outage: { extended: true, unobserved_since: '2026-11-16T20:05:06Z', threshold_hours: 24 },
+}
+
+describe('sportsbook rows', () => {
+  it('every key on every captured row is declared on Sportsbook', () => {
+    const declared = new Set(declaredFields('Sportsbook'))
+    const rows = fixture('sportsbooks.json').data as Record<string, unknown>[]
+    const undeclared = rows.flatMap((r) => Object.keys(r)).filter((k) => !declared.has(k))
+    expect(undeclared).toEqual([])
+  })
+
+  it('a lay row and a paused row come through typed', async () => {
+    respondWith(fixture('sportsbooks.json'))
+    const res = await new SharpAPI('sk_test').sportsbooks.list()
+    const byId = new Map(res.data.map((b) => [b.id, b]))
+
+    const lay = byId.get('smarkets_lay')
+    expect(lay?.pricing_model).toBe('lay')
+    expect(byId.get('betonline')?.pricing_model).toBe('back')
+
+    const paused = byId.get('betfair_lay')
+    expect(paused?.idle_reason).toBe('paused')
+    expect(paused?.currently_serving).toBe(false)
+    expect(paused?.has_limits).toBeNull()
+    expect(paused?.outage).toBeNull()
+
+    expect(res.data.some((b) => b.is_pickem)).toBe(true)
+  })
+
+  it('a feed gap with an outage comes through typed', async () => {
+    const body = fixture('sportsbooks.json')
+    const row = body.data.find((b: { id: string }) => b.id === 'draftkings_predictions')
+    expect(row).toBeDefined()
+    body.data = [{ ...row, ...FEED_GAP }]
+    respondWith(body)
+    const res = await new SharpAPI('sk_test').sportsbooks.list()
+
+    const gap = res.data[0]
+    expect(gap.idle_reason).toBe('feed_gap')
+    expect(gap.currently_serving).toBe(false)
+    // Typed read: stops compiling if `outage` leaves Sportsbook or changes type.
+    const outage: SportsbookOutage | null | undefined = gap.outage
+    expect(outage).toEqual(FEED_GAP.outage)
+    expect(Object.keys(outage ?? {}).sort()).toEqual(declaredFields('SportsbookOutage').sort())
+    expect(typeof outage?.extended).toBe('boolean')
+    expect(typeof outage?.unobserved_since).toBe('string')
+    expect(typeof outage?.threshold_hours).toBe('number')
+  })
+})
+
+// --------------------------------------------------------------------------- //
+// 5. Sportsbook logo
+// --------------------------------------------------------------------------- //
+
+// `logo` is on every row: a link, or null when the book has no logo yet.
+describe('sportsbook logo', () => {
+  it('every captured row carries the key, or the typed read below is vacuous', () => {
+    const rows = fixture('sportsbooks.json').data as Record<string, unknown>[]
+    expect(rows.length).toBeGreaterThan(0)
+    expect(rows.filter((r) => !('logo' in r))).toEqual([])
+  })
+
+  it('a captured logo link comes through typed and unchanged', async () => {
+    const body = fixture('sportsbooks.json')
+    respondWith(body)
+    const res = await new SharpAPI('sk_test').sportsbooks.list()
+    // Typed read: stops compiling if `logo` leaves Sportsbook.
+    const logo: string | null | undefined = res.data[0].logo
+    expect(typeof logo).toBe('string')
+    expect(logo).toBe(body.data[0].logo)
+    expect(res.data[0]).toEqual(body.data[0])
+  })
+
+  // No captured row has a null logo, so this row is a captured row with the
+  // key set to null.
+  it('a row with `logo: null` reads null, not undefined', async () => {
+    const body = fixture('sportsbooks.json')
+    body.data = [{ ...body.data[0], logo: null }]
+    respondWith(body)
+    const res = await new SharpAPI('sk_test').sportsbooks.list()
+    expect(res.data[0].logo).toBeNull()
+    expect(res.data[0]).toEqual(body.data[0])
+  })
+})

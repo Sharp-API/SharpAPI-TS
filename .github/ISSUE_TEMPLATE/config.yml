@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://docs.sharpapi.io/sdks/typescript
+    about: Guides and the full API reference.
+  - name: Account, plan, billing or API key help
+    url: https://sharpapi.io/contact
+    about: Please do not post account details or API keys in a public issue.
+  - name: Report a security issue
+    url: https://github.com/Sharp-API/SharpAPI-TS/security/policy
+    about: Security reports are handled privately. See the security policy.
+  - name: API status
+    url: https://status.sharpapi.io
+    about: Check whether the API is having a problem right now.

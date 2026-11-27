@@ -1,0 +1,13 @@
+{
+  "data": [
+    {
+      "id": "nfl",
+      "display_name": "NFL",
+      "numerical_id": 376,
+      "sport": "football",
+      "event_count": 1830,
+      "live_count": 2
+    }
+  ],
+  "updated_at": "2026-08-23T19:18:25.253305835Z"
+}

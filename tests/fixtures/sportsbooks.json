@@ -1,0 +1,163 @@
+{
+  "data": [
+    {
+      "id": "betonline",
+      "display_name": "BetOnline",
+      "short_name": "BetOnline",
+      "numerical_id": 10,
+      "category": "regional",
+      "is_sharp": false,
+      "has_live_odds": true,
+      "has_player_props": true,
+      "logo": "https://cdn.sharpapi.io/sportsbooks/betonline.png",
+      "pricing_model": "back",
+      "is_pickem": false,
+      "has_limits": false,
+      "regions": [
+        "US"
+      ],
+      "requires_tier": "hobby",
+      "status": "active",
+      "event_count": 595,
+      "last_update": "2026-11-22T17:23:00.305022593Z",
+      "coming_soon": false,
+      "currently_serving": true,
+      "idle_reason": null,
+      "outage": null
+    },
+    {
+      "id": "smarkets_lay",
+      "display_name": "Smarkets (Lay)",
+      "short_name": "Smarkets (Lay)",
+      "numerical_id": 82,
+      "category": "exchange",
+      "is_sharp": false,
+      "has_live_odds": true,
+      "has_player_props": false,
+      "logo": "https://cdn.sharpapi.io/sportsbooks/smarkets_lay.png",
+      "pricing_model": "lay",
+      "is_pickem": false,
+      "has_limits": true,
+      "regions": [
+        "UK",
+        "EU"
+      ],
+      "requires_tier": "hobby",
+      "status": "active",
+      "event_count": 245,
+      "last_update": "2026-11-22T17:21:50.850416617Z",
+      "coming_soon": false,
+      "currently_serving": true,
+      "idle_reason": null,
+      "outage": null
+    },
+    {
+      "id": "betfair_lay",
+      "display_name": "Betfair Exchange (Lay)",
+      "short_name": "Betfair Exchange (Lay)",
+      "numerical_id": 62,
+      "category": "exchange",
+      "is_sharp": false,
+      "has_live_odds": true,
+      "has_player_props": false,
+      "logo": "https://cdn.sharpapi.io/sportsbooks/betfair_lay.png",
+      "pricing_model": "lay",
+      "is_pickem": false,
+      "has_limits": null,
+      "regions": [
+        "UK",
+        "EU",
+        "AU"
+      ],
+      "requires_tier": "sharp",
+      "status": "inactive",
+      "event_count": 0,
+      "last_update": null,
+      "coming_soon": false,
+      "currently_serving": false,
+      "idle_reason": "paused",
+      "outage": null
+    },
+    {
+      "id": "draftkings_pick2",
+      "display_name": "DraftKings Pick6 (2 Pick)",
+      "short_name": "DraftKings Pick6 (2 Pick)",
+      "numerical_id": 83,
+      "category": "regional",
+      "is_sharp": false,
+      "has_live_odds": false,
+      "has_player_props": true,
+      "logo": "https://cdn.sharpapi.io/sportsbooks/draftkings_pick2.png",
+      "pricing_model": "back",
+      "is_pickem": true,
+      "has_limits": false,
+      "regions": [
+        "US"
+      ],
+      "requires_tier": "hobby",
+      "status": "active",
+      "event_count": 29,
+      "last_update": "2026-11-22T17:21:12.196370036Z",
+      "coming_soon": false,
+      "currently_serving": true,
+      "idle_reason": null,
+      "outage": null
+    },
+    {
+      "id": "draftkings_predictions",
+      "display_name": "DraftKings Predictions",
+      "short_name": "DraftKings Predictions",
+      "numerical_id": 87,
+      "category": "exchange",
+      "is_sharp": false,
+      "has_live_odds": true,
+      "has_player_props": false,
+      "logo": "https://cdn.sharpapi.io/sportsbooks/draftkings_predictions.png",
+      "pricing_model": "back",
+      "is_pickem": false,
+      "has_limits": true,
+      "regions": [
+        "US"
+      ],
+      "requires_tier": "hobby",
+      "status": "active",
+      "event_count": 142,
+      "last_update": "2026-11-22T17:23:00.307108233Z",
+      "coming_soon": false,
+      "currently_serving": true,
+      "idle_reason": null,
+      "outage": null
+    }
+  ],
+  "retired": [
+    {
+      "id": "betano",
+      "display_name": "Betano"
+    },
+    {
+      "id": "galera",
+      "display_name": "Galera.bet"
+    },
+    {
+      "id": "sportingbet_br",
+      "display_name": "Sportingbet BR"
+    },
+    {
+      "id": "unibet_be",
+      "display_name": "Unibet (Belgium)"
+    },
+    {
+      "id": "unibet_ca",
+      "display_name": "Unibet (Canada)"
+    },
+    {
+      "id": "unibet_de",
+      "display_name": "Unibet (Germany)"
+    },
+    {
+      "id": "unibet_ro",
+      "display_name": "Unibet (Romania)"
+    }
+  ],
+  "updated_at": "2026-11-22T17:23:09.9174124Z"
+}
